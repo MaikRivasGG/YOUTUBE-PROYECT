@@ -30,7 +30,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </h1>
           <p className="text-sidebar-text mt-3 text-sm leading-relaxed">
             Framehouse ordena el trabajo de tu equipo con las etapas reales de un canal faceless, no
-            con listas genericas.
+            con listas genéricas.
           </p>
           <ul className="mt-7 space-y-3">
             {HIGHLIGHTS.map((item) => (
