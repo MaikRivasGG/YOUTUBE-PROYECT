@@ -107,23 +107,25 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY="eyJhbGciOi..."
 NEXT_PUBLIC_SITE_URL="http://localhost:3000"
 ```
 
-### 4. Aplicar las migraciones
+### 4. Crear el esquema
 
-Opcion A — **SQL Editor** (rapido): abre el editor SQL del proyecto y ejecuta,
-**en este orden**, el contenido de:
+Opcion A — **un solo copia y pega** (lo mas rapido): abre
+**SQL Editor → New query**, pega entero el fichero [`supabase/setup.sql`](supabase/setup.sql)
+y pulsa _Run_. Deja las 11 tablas, las 37 politicas RLS y las 21 funciones
+listas de una vez.
 
-1. `supabase/migrations/20250101000000_init_schema.sql`
-2. `supabase/migrations/20250101000100_functions.sql`
-3. `supabase/migrations/20250101000200_rls.sql`
-4. `supabase/migrations/20250101000300_realtime.sql`
-5. `supabase/migrations/20250101000400_demo_seed.sql`
-
-Opcion B — **Supabase CLI**:
+Opcion B — **Supabase CLI**, si prefieres llevar las migraciones versionadas:
 
 ```bash
 npx supabase link --project-ref <tu-project-ref>
 npx supabase db push
 ```
+
+Opcion C — a mano, ejecutando en orden los cinco ficheros de
+`supabase/migrations/`.
+
+> `supabase/setup.sql` se genera a partir de las migraciones con
+> `npm run db:bundle`. Si tocas el esquema, regeneralo.
 
 ### 5. Configurar Auth
 
@@ -254,7 +256,8 @@ Las politicas RLS y las reglas del pipeline tambien se prueban de verdad, contra
 un Postgres local efimero (requiere `initdb`, `pg_ctl` y `psql` en el PATH):
 
 ```bash
-npm run db:test
+npm run db:test     # 27 escenarios de RLS contra un Postgres efimero
+npm run db:bundle   # regenera supabase/setup.sql desde las migraciones
 ```
 
 El script crea un cluster temporal, aplica `supabase/tests/00_supabase_shim.sql`
