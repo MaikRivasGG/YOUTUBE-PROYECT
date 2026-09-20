@@ -54,11 +54,20 @@ export function CommandPalette({
     const timer = setTimeout(async () => {
       setLoading(true);
       const supabase = supabaseBrowser();
+      // `or()` recibe un filtro en crudo: hay que limpiar los caracteres con
+      // los que se podria reescribir la condicion (coma, parentesis, comodines).
+      const safeTerm = term.replace(/[,()%*\\]/g, " ").trim();
+      if (safeTerm.length < 2) {
+        setHits([]);
+        setLoading(false);
+        return;
+      }
+
       const { data } = await supabase
         .from("videos")
         .select("id, ref, title, status, channel_id")
         .eq("workspace_id", workspaceId)
-        .or(`title.ilike.%${term}%,ref.ilike.%${term}%`)
+        .or(`title.ilike.%${safeTerm}%,ref.ilike.%${safeTerm}%`)
         .limit(8);
 
       if (!cancelled) {

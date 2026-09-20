@@ -26,9 +26,12 @@ import {
 import { toDateInput } from "@/lib/dates";
 import { PIPELINE, PRIORITIES, priorityMeta, stageMeta } from "@/lib/domain/pipeline";
 import { canMoveVideo } from "@/lib/domain/roles";
-import { cn, errorMessage } from "@/lib/utils";
+import { cn, errorMessage, isSafeHttpUrl } from "@/lib/utils";
 import type { VideoDetail as VideoDetailData } from "@/server/queries";
 import type { Video, VideoStatus } from "@/types/database";
+
+/** Campos que se renderizan como enlace o imagen y exigen http(s). */
+const URL_FIELDS = new Set<keyof Video>(["youtube_url", "thumbnail_url"]);
 
 export function VideoDetailView({ video: initial }: { video: VideoDetailData }) {
   const { channels, members, can, role, userId, memberById } = useWorkspace();
@@ -49,6 +52,12 @@ export function VideoDetailView({ video: initial }: { video: VideoDetailData }) 
     async (field: keyof Video, value: string | null) => {
       const previous = video[field];
       if (previous === value) return;
+
+      // Los campos de enlace acaban en un <a href> o un <img src>.
+      if (URL_FIELDS.has(field) && value !== null && !isSafeHttpUrl(value)) {
+        toast.error("El enlace debe empezar por http:// o https://");
+        return;
+      }
 
       setVideo((current) => ({ ...current, [field]: value }) as VideoDetailData);
       setSavingField(field);

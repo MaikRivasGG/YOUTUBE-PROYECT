@@ -70,3 +70,20 @@ function translateError(message: string): string | null {
   }
   return null;
 }
+
+/**
+ * Solo se aceptan enlaces http(s).
+ *
+ * Los campos de URL los rellena el equipo y luego se pintan como <a href>: sin
+ * este filtro, un "javascript:..." guardado por un miembro se ejecutaria en el
+ * navegador de sus companeros. La base de datos aplica la misma regla con un
+ * CHECK, esto es la primera barrera.
+ */
+export function isSafeHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}

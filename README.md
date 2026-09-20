@@ -259,12 +259,34 @@ npm run db:test
 
 El script crea un cluster temporal, aplica `supabase/tests/00_supabase_shim.sql`
 (la parte de Supabase que no esta en las migraciones: esquema `auth`, `auth.uid()`
-y los roles `anon` / `authenticated`), ejecuta las cinco migraciones y recorre 25
+y los roles `anon` / `authenticated`), ejecuta las cinco migraciones y recorre 27
 escenarios: quien ve que, quien puede mover cada etapa, invitaciones, intentos de
-auto-promocion y borrados en cascada. Los `ERROR` marcados como _debe fallar_ son
+auto-promocion, borrados en cascada y enlaces no permitidos. Los `ERROR` marcados como _debe fallar_ son
 el resultado esperado.
 
 ---
+
+## Notas de seguridad
+
+- **La interfaz no decide nada.** Cada regla esta en Postgres: RLS en las once
+  tablas, `has_permission()` para los permisos generales y
+  `videos_guard_stage_change` para los saltos de etapa. El cliente solo replica
+  la matriz para pintar botones.
+- **Solo se usa la clave `anon`.** La `service_role` no aparece en la
+  aplicacion, asi que un despliegue comprometido no da acceso total a los datos.
+- **Enlaces.** Los campos de URL que acaban en un `<a href>` o un `<img src>`
+  solo aceptan `http(s)`, validado en el cliente y con un `CHECK` en la base de
+  datos, para que nadie del equipo pueda guardar un `javascript:`.
+- **Busqueda.** El termino se limpia antes de entrar en un filtro de PostgREST
+  para que no pueda reescribir la condicion.
+- **Redirecciones.** El parametro `next` del login y del callback de Supabase
+  solo admite rutas internas.
+- **Invitaciones.** Token de 192 bits, un solo uso, con caducidad y comprobacion
+  de que el email coincide con la cuenta que la acepta.
+
+Queda fuera y conviene anadir antes de abrir el producto al publico: cabecera
+`Content-Security-Policy` con nonce, limite de intentos propio por encima del de
+Supabase Auth y registro de auditoria exportable.
 
 ## Decisiones tecnicas
 

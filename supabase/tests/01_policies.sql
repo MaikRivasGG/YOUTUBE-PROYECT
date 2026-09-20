@@ -181,3 +181,14 @@ select count(*) as checklist_despues from public.checklist_items;
 \echo ''
 \echo '## 25 · Las metricas del dashboard responden'
 select jsonb_pretty(public.workspace_stats((select id from public.workspaces limit 1)));
+
+\echo ''
+\echo '## 26 · Un enlace javascript: no entra en la base de datos -> debe fallar'
+update public.videos set youtube_url = 'javascript:alert(1)'
+  where ref = 'VID-0002';
+
+\echo ''
+\echo '## 27 · Un enlace https si entra'
+update public.videos set youtube_url = 'https://youtu.be/abc123'
+  where ref = 'VID-0002';
+select ref, youtube_url from public.videos where ref = 'VID-0002';
