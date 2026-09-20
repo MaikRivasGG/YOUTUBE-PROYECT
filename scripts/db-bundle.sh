@@ -14,7 +14,7 @@ OUT="$ROOT/supabase/setup.sql"
 --
 -- Pega este fichero entero en el SQL Editor de tu proyecto de Supabase
 -- (Dashboard -> SQL Editor -> New query) y pulsa Run. Equivale a aplicar las
--- cinco migraciones de supabase/migrations/ en orden.
+-- migraciones de supabase/migrations/ en orden.
 --
 -- Se puede ejecutar una sola vez sobre un proyecto nuevo y vacio.
 -- Generado desde supabase/migrations/ — no editar a mano: si cambias el

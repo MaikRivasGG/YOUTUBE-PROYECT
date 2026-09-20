@@ -121,8 +121,7 @@ npx supabase link --project-ref <tu-project-ref>
 npx supabase db push
 ```
 
-Opcion C — a mano, ejecutando en orden los cinco ficheros de
-`supabase/migrations/`.
+Opcion C — a mano, ejecutando en orden los ficheros de `supabase/migrations/`.
 
 > `supabase/setup.sql` se genera a partir de las migraciones con
 > `npm run db:bundle`. Si tocas el esquema, regeneralo.
@@ -256,15 +255,16 @@ Las politicas RLS y las reglas del pipeline tambien se prueban de verdad, contra
 un Postgres local efimero (requiere `initdb`, `pg_ctl` y `psql` en el PATH):
 
 ```bash
-npm run db:test     # 27 escenarios de RLS contra un Postgres efimero
+npm run db:test     # 29 escenarios de RLS contra un Postgres efimero
 npm run db:bundle   # regenera supabase/setup.sql desde las migraciones
 ```
 
 El script crea un cluster temporal, aplica `supabase/tests/00_supabase_shim.sql`
 (la parte de Supabase que no esta en las migraciones: esquema `auth`, `auth.uid()`
-y los roles `anon` / `authenticated`), ejecuta las cinco migraciones y recorre 27
+y los roles `anon` / `authenticated`), ejecuta las migraciones y recorre 29
 escenarios: quien ve que, quien puede mover cada etapa, invitaciones, intentos de
-auto-promocion, borrados en cascada y enlaces no permitidos. Los `ERROR` marcados como _debe fallar_ son
+auto-promocion, borrados en cascada, enlaces no permitidos e intentos de escribir
+actividad falsa. Los `ERROR` marcados como _debe fallar_ son
 el resultado esperado.
 
 ---
@@ -284,12 +284,26 @@ el resultado esperado.
   para que no pueda reescribir la condicion.
 - **Redirecciones.** El parametro `next` del login y del callback de Supabase
   solo admite rutas internas.
+- **Funciones cerradas.** PostgREST publica en `/rest/v1/rpc/` cualquier funcion
+  de `public`, asi que `20250101000500_harden_grants.sql` revoca el `EXECUTE` de
+  todas y lo devuelve solo a las que la aplicacion llama. Cierra un agujero real:
+  `log_activity()` es `SECURITY DEFINER` y no comprueba membresia, de modo que
+  cualquiera con sesion podia inyectar actividad falsa en el feed de otro equipo.
+  Las unicas que siguen abiertas son los RPCs de la aplicacion (que validan por
+  dentro) y `invitation_preview`, que necesita responder a alguien que aun no ha
+  iniciado sesion.
 - **Invitaciones.** Token de 192 bits, un solo uso, con caducidad y comprobacion
   de que el email coincide con la cuenta que la acepta.
 
 Queda fuera y conviene anadir antes de abrir el producto al publico: cabecera
 `Content-Security-Policy` con nonce, limite de intentos propio por encima del de
-Supabase Auth y registro de auditoria exportable.
+Supabase Auth, un tope de equipos por usuario (hoy `create_workspace` y
+`seed_demo_workspace` se pueden llamar en bucle) y registro de auditoria
+exportable.
+
+Los avisos del linter de Supabase estan revisados: no queda ninguno de
+`search_path` mutable ni de RLS reevaluando `auth.uid()` por fila. Los que
+siguen apareciendo son deliberados y estan explicados arriba.
 
 ## Decisiones tecnicas
 

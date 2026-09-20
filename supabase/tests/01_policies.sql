@@ -192,3 +192,22 @@ update public.videos set youtube_url = 'javascript:alert(1)'
 update public.videos set youtube_url = 'https://youtu.be/abc123'
   where ref = 'VID-0002';
 select ref, youtube_url from public.videos where ref = 'VID-0002';
+
+\echo ''
+\echo '## 28 · Un cliente no puede inyectar actividad falsa -> debe fallar'
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+set role authenticated;
+select public.log_activity(
+  (select id from public.workspaces limit 1), null, 'video.moved', '{"title":"falso"}'::jsonb);
+
+\echo ''
+\echo '## 29 · Los triggers siguen funcionando pese a revocar sus funciones'
+reset role;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+set role authenticated;
+insert into public.videos (workspace_id, title, status)
+  values ((select id from public.workspaces limit 1), 'Prueba de triggers', 'idea');
+select ref, created_by is not null as autor_sellado
+from public.videos where title = 'Prueba de triggers';
+select count(*) as actividad_registrada from public.activity
+where type = 'video.created' and payload->>'title' = 'Prueba de triggers';
