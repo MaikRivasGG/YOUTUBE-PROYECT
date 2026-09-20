@@ -11,6 +11,19 @@ Construido con **Next.js 16 (App Router) + TypeScript + Tailwind 4** sobre
 
 ---
 
+## En produccion
+
+|                   |                                              |
+| ----------------- | -------------------------------------------- |
+| Aplicacion        | <https://framehouse-eta-snowy.vercel.app>    |
+| Proyecto Vercel   | `framehouse` (region `gru1`, Sao Paulo)      |
+| Proyecto Supabase | `framehouse` (region `sa-east-1`, Sao Paulo) |
+| Rama desplegada   | `claude/determined-keller-xbe80r`            |
+
+Cada push a esa rama dispara un despliegue de produccion. Las funciones de
+Vercel y la base de datos estan en la misma region para que las consultas no
+crucen el continente.
+
 ## Indice
 
 1. [Que incluye](#que-incluye)
