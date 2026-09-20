@@ -2,11 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 
+import { PERMISSION_FIELDS, type PermissionFlag } from "@/lib/domain/roles";
 import { roleSchema } from "@/lib/domain/validators";
 import { requireWorkspace } from "@/lib/session";
 import { supabaseServer } from "@/lib/supabase/server";
 import { errorMessage } from "@/lib/utils";
 import { fail, ok, zodFieldErrors, type ActionResult } from "@/server/action-result";
+import type { Role } from "@/types/database";
 
 type State = ActionResult<undefined> | null;
 
@@ -25,6 +27,7 @@ function readRole(formData: FormData) {
     edit_videos: flag("edit_videos"),
     assign_videos: flag("assign_videos"),
     move_any_stage: flag("move_any_stage"),
+    manage_checklist: flag("manage_checklist"),
     write_comments: flag("write_comments"),
     stage_ids: formData.getAll("stage_ids").map(String),
   };
@@ -101,6 +104,41 @@ export async function updateRoleAction(_prev: State, formData: FormData): Promis
 
   const stagesError = await syncRoleStages(id, stageIds);
   if (stagesError) return fail(errorMessage(stagesError));
+
+  revalidateAll();
+  return ok(undefined);
+}
+
+/**
+ * Cambia un solo permiso de un rol desde la matriz.
+ *
+ * La matriz permite tocar una casilla suelta sin abrir el editor entero, asi
+ * que aqui no se valida el rol completo: solo se comprueba que la columna sea
+ * una de las conocidas. La autoridad sigue siendo RLS, que rechaza los roles
+ * de sistema y a quien no tiene 'workspace.manage'.
+ */
+export async function togglePermissionAction(
+  roleId: string,
+  flag: PermissionFlag,
+  value: boolean,
+): Promise<ActionResult<undefined>> {
+  if (!PERMISSION_FIELDS.some((field) => field.flag === flag)) {
+    return fail("Permiso desconocido");
+  }
+
+  await requireWorkspace();
+  const supabase = await supabaseServer();
+
+  // La clave es dinamica, asi que se construye el parche en dos pasos para que
+  // TypeScript siga viendo una columna concreta y no un indice suelto.
+  const patch: Partial<Pick<Role, PermissionFlag>> = {};
+  patch[flag] = value;
+
+  const { error } = await supabase.from("roles").update(patch).eq("id", roleId);
+
+  if (error) {
+    return fail(errorMessage(error, "Los roles de sistema no se pueden editar"));
+  }
 
   revalidateAll();
   return ok(undefined);

@@ -56,6 +56,22 @@ export type Pipeline = {
   updated_at: string;
 };
 
+/** Campos del video que una etapa puede exigir antes de dejar pasar la tarjeta. */
+export const REQUIRABLE_FIELDS = [
+  "hook",
+  "description",
+  "script_body",
+  "due_date",
+  "publish_at",
+  "youtube_url",
+  "thumbnail_url",
+  "channel_id",
+  "assignee",
+  "asset",
+] as const;
+
+export type RequirableField = (typeof REQUIRABLE_FIELDS)[number];
+
 export type Stage = {
   id: string;
   pipeline_id: string;
@@ -64,6 +80,10 @@ export type Stage = {
   color: string;
   kind: StageKind;
   position: number;
+  /** Exige que los pasos del checklist de esta etapa esten cerrados. */
+  require_checklist: boolean;
+  /** Campos del video que tienen que estar rellenos para avanzar. */
+  required_fields: RequirableField[];
   created_at: string;
   updated_at: string;
 };
@@ -85,6 +105,7 @@ export type Role = {
   edit_videos: boolean;
   assign_videos: boolean;
   move_any_stage: boolean;
+  manage_checklist: boolean;
   write_comments: boolean;
   created_at: string;
   updated_at: string;
@@ -187,8 +208,32 @@ export type Comment = {
   video_id: string;
   author_id: string | null;
   body: string;
+  /** Miembros mencionados con @; el trigger descarta a quien no es del equipo. */
+  mentions: string[];
   created_at: string;
   updated_at: string;
+};
+
+/** Paso de la plantilla de produccion de un canal. */
+export type ChannelTemplateItem = {
+  id: string;
+  channel_id: string;
+  title: string;
+  stage_id: string | null;
+  role_id: string | null;
+  position: number;
+  created_at: string;
+};
+
+/** Entrada de una tarjeta en una etapa; de aqui salen los tiempos por etapa. */
+export type StageTransition = {
+  id: number;
+  workspace_id: string;
+  video_id: string;
+  from_stage: string | null;
+  to_stage: string;
+  actor_id: string | null;
+  created_at: string;
 };
 
 export type Asset = {
@@ -257,7 +302,19 @@ export type Database = {
         Pipeline,
         Insert<Pipeline, "id" | Timestamps | "description" | "is_default" | "position">
       >;
-      stages: TableDef<Stage, Insert<Stage, "id" | Timestamps | "color" | "kind" | "position">>;
+      stages: TableDef<
+        Stage,
+        Insert<
+          Stage,
+          | "id"
+          | Timestamps
+          | "color"
+          | "kind"
+          | "position"
+          | "require_checklist"
+          | "required_fields"
+        >
+      >;
       roles: TableDef<
         Role,
         Insert<
@@ -277,6 +334,7 @@ export type Database = {
           | "edit_videos"
           | "assign_videos"
           | "move_any_stage"
+          | "manage_checklist"
           | "write_comments"
         >
       >;
@@ -343,7 +401,15 @@ export type Database = {
         >
       >;
       checklist_assignees: TableDef<ChecklistAssignee, Insert<ChecklistAssignee, "created_at">>;
-      comments: TableDef<Comment, Insert<Comment, "id" | Timestamps>>;
+      comments: TableDef<Comment, Insert<Comment, "id" | Timestamps | "mentions">>;
+      channel_template_items: TableDef<
+        ChannelTemplateItem,
+        Insert<ChannelTemplateItem, "id" | "created_at" | "stage_id" | "role_id" | "position">
+      >;
+      stage_transitions: TableDef<
+        StageTransition,
+        Insert<StageTransition, "id" | "created_at" | "from_stage" | "actor_id">
+      >;
       assets: TableDef<Asset, Insert<Asset, "id" | "kind" | "label" | "created_by" | "created_at">>;
       activity: TableDef<Activity, Insert<Activity, "id" | "payload" | "created_at">>;
       notifications: TableDef<
@@ -373,6 +439,12 @@ export type Database = {
       workspace_stats: { Args: { p_workspace: string }; Returns: WorkspaceStats };
       has_permission: { Args: { p_workspace: string; p_permission: string }; Returns: boolean };
       is_owner: { Args: { p_workspace: string }; Returns: boolean };
+      stage_exit_blockers: { Args: { p_video: string; p_stage: string }; Returns: string[] };
+      save_template_from_video: { Args: { p_video: string }; Returns: number };
+      stage_durations: {
+        Args: { p_workspace: string; p_days?: number };
+        Returns: { stage_id: string; avg_hours: number; samples: number }[];
+      };
     };
     Enums: {
       stage_kind: StageKind;

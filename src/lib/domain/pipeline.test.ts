@@ -20,6 +20,8 @@ function stage(slug: string, position: number, kind: StageKind = "work"): Stage 
     color: "#000000",
     kind,
     position,
+    require_checklist: false,
+    required_fields: [],
     created_at: "2025-01-01T00:00:00Z",
     updated_at: "2025-01-01T00:00:00Z",
   };

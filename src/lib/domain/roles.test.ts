@@ -20,6 +20,7 @@ function role(overrides: Partial<Role> & { name: string }): Role {
     edit_videos: true,
     assign_videos: false,
     move_any_stage: false,
+    manage_checklist: false,
     write_comments: true,
     created_at: "2025-01-01T00:00:00Z",
     updated_at: "2025-01-01T00:00:00Z",

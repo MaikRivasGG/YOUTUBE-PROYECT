@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { PermissionsMatrix } from "@/components/admin/permissions-matrix";
 import { PipelinesPanel } from "@/components/admin/pipelines-panel";
 import { RolesPanel } from "@/components/admin/roles-panel";
 import { PageHeader } from "@/components/layout/page-header";
@@ -27,6 +28,7 @@ export default async function SettingsPage() {
           <WorkspaceForm />
           <PipelinesPanel />
           <RolesPanel />
+          <PermissionsMatrix />
           <DeleteWorkspaceForm />
         </div>
       </div>

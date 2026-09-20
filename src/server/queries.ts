@@ -4,6 +4,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import type {
   Activity,
   Channel,
+  ChannelTemplateItem,
   Invitation,
   Notification,
   Pipeline,
@@ -244,7 +245,13 @@ export interface VideoDetail extends Video {
     position: number;
     checklist_assignees: { user_id: string }[];
   }[];
-  comments: { id: string; body: string; author_id: string | null; created_at: string }[];
+  comments: {
+    id: string;
+    body: string;
+    author_id: string | null;
+    mentions: string[];
+    created_at: string;
+  }[];
   assets: { id: string; kind: string; label: string; url: string; created_at: string }[];
 }
 
@@ -253,7 +260,7 @@ export async function getVideoDetail(id: string): Promise<VideoDetail | null> {
   const { data, error } = await supabase
     .from("videos")
     .select(
-      "*, video_assignees(user_id), checklist_items(id, title, stage_id, role_id, is_done, done_at, completed_by, position, checklist_assignees(user_id)), comments(id, body, author_id, created_at), assets(id, kind, label, url, created_at)",
+      "*, video_assignees(user_id), checklist_items(id, title, stage_id, role_id, is_done, done_at, completed_by, position, checklist_assignees(user_id)), comments(id, body, author_id, mentions, created_at), assets(id, kind, label, url, created_at)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -300,4 +307,65 @@ export async function getAnalyticsVideos(workspaceId: string): Promise<Analytics
 
   if (error) return [];
   return (data ?? []) as unknown as AnalyticsVideo[];
+}
+
+/** Pasos de la plantilla de produccion de un canal. */
+export async function getChannelTemplate(channelId: string): Promise<ChannelTemplateItem[]> {
+  const supabase = await supabaseServer();
+  const { data, error } = await supabase
+    .from("channel_template_items")
+    .select("*")
+    .eq("channel_id", channelId)
+    .order("position", { ascending: true });
+
+  if (error) return [];
+  return data ?? [];
+}
+
+/** Todas las plantillas del equipo, agrupadas por canal. */
+export async function getWorkspaceTemplates(
+  channelIds: string[],
+): Promise<Map<string, ChannelTemplateItem[]>> {
+  const grouped = new Map<string, ChannelTemplateItem[]>();
+  if (channelIds.length === 0) return grouped;
+
+  const supabase = await supabaseServer();
+  const { data, error } = await supabase
+    .from("channel_template_items")
+    .select("*")
+    .in("channel_id", channelIds)
+    .order("position", { ascending: true });
+
+  if (error) return grouped;
+
+  for (const item of data ?? []) {
+    const list = grouped.get(item.channel_id) ?? [];
+    list.push(item);
+    grouped.set(item.channel_id, list);
+  }
+
+  return grouped;
+}
+
+export interface StageDuration {
+  stage_id: string;
+  avg_hours: number;
+  samples: number;
+}
+
+/**
+ * Tiempo medio que pasa una tarjeta en cada etapa, en horas.
+ *
+ * Sale del registro de transiciones, no de la fecha de creacion del video, asi
+ * que responde a "donde se atasca" y no solo a "cuanto tarda en total".
+ */
+export async function getStageDurations(workspaceId: string, days = 90): Promise<StageDuration[]> {
+  const supabase = await supabaseServer();
+  const { data, error } = await supabase.rpc("stage_durations", {
+    p_workspace: workspaceId,
+    p_days: days,
+  });
+
+  if (error) return [];
+  return data ?? [];
 }

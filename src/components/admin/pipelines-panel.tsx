@@ -10,7 +10,11 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Card } from "@/components/ui/misc";
-import { STAGE_KINDS } from "@/lib/domain/pipeline";
+import {
+  REQUIRABLE_FIELD_LABELS,
+  STAGE_KINDS,
+  stageRequirementsSummary,
+} from "@/lib/domain/pipeline";
 import {
   createPipelineAction,
   createStageAction,
@@ -117,6 +121,9 @@ export function PipelinesPanel() {
                       <span className="text-ink-900 block truncate text-[13px]">{stage.name}</span>
                       <span className="text-ink-400 text-[11px]">
                         {STAGE_KINDS.find((kind) => kind.value === stage.kind)?.label}
+                        {stageRequirementsSummary(stage) ? (
+                          <> · {stageRequirementsSummary(stage)}</>
+                        ) : null}
                       </span>
                     </span>
 
@@ -354,6 +361,54 @@ function StageDialog({
             ))}
           </div>
         </Field>
+
+        <fieldset className="border-line rounded-xl border p-3">
+          <legend className="text-ink-700 px-1 text-[13px] font-medium">
+            Requisitos para avanzar
+          </legend>
+          <p className="text-ink-400 mb-2.5 text-[11.5px]">
+            Lo que tiene que estar hecho antes de que una tarjeta salga de esta etapa hacia
+            adelante. Retroceder nunca se bloquea.
+          </p>
+
+          <label className="hover:bg-canvas flex cursor-pointer items-start gap-2 rounded-lg p-1.5 transition">
+            <input
+              type="checkbox"
+              name="require_checklist"
+              defaultChecked={stage?.require_checklist ?? false}
+              className="accent-brand-500 mt-0.5 size-4 rounded"
+            />
+            <span className="min-w-0">
+              <span className="text-ink-900 block text-[12.5px] font-medium">
+                Checklist de la etapa cerrado
+              </span>
+              <span className="text-ink-400 block text-[11.5px]">
+                Todos los pasos asignados a esta etapa tienen que estar marcados.
+              </span>
+            </span>
+          </label>
+
+          <p className="text-ink-500 mt-2.5 mb-1.5 text-[11.5px] font-medium">
+            Campos obligatorios
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {REQUIRABLE_FIELD_LABELS.map(({ value, label }) => (
+              <label
+                key={value}
+                className="ring-line hover:bg-canvas text-ink-700 inline-flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] ring-1 transition has-checked:ring-2"
+              >
+                <input
+                  type="checkbox"
+                  name="required_fields"
+                  value={value}
+                  defaultChecked={stage?.required_fields?.includes(value) ?? false}
+                  className="accent-brand-500 size-3.5 rounded"
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
 
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>

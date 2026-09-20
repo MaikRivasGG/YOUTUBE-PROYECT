@@ -43,6 +43,9 @@ export function ChecklistPanel({ videoId, initial }: { videoId: string; initial:
   const done = items.filter((item) => item.is_done).length;
   const progress = items.length ? Math.round((done / items.length) * 100) : 0;
   const editable = can("video.edit");
+  // Marcar un paso y asignar gente es trabajar; anadir, cambiar de rol o
+  // borrar pasos es tocar el proceso, y eso pide su propio permiso.
+  const manageStructure = can("checklist.manage");
   const myRoleIds = new Set(myRoles.map((role) => role.id));
 
   /** Un paso sin rol lo marca cualquiera; con rol, solo quien lo lleva. */
@@ -281,17 +284,21 @@ export function ChecklistPanel({ videoId, initial }: { videoId: string; initial:
                     </Menu>
 
                     <Menu
-                      className="w-52"
-                      trigger={({ toggle: openMenu }) => (
-                        <button
-                          type="button"
-                          onClick={openMenu}
-                          aria-label="Rol que completa el paso"
-                          className="text-ink-400 hover:text-ink-900 rounded-md p-1 transition"
-                        >
-                          <ChevronDown className="size-3.5" />
-                        </button>
-                      )}
+                      className={manageStructure ? "w-52" : "hidden"}
+                      trigger={({ toggle: openMenu }) =>
+                        manageStructure ? (
+                          <button
+                            type="button"
+                            onClick={openMenu}
+                            aria-label="Rol que completa el paso"
+                            className="text-ink-400 hover:text-ink-900 rounded-md p-1 transition"
+                          >
+                            <ChevronDown className="size-3.5" />
+                          </button>
+                        ) : (
+                          <span />
+                        )
+                      }
                     >
                       {({ close }) => (
                         <>
@@ -326,14 +333,16 @@ export function ChecklistPanel({ videoId, initial }: { videoId: string; initial:
                       )}
                     </Menu>
 
-                    <button
-                      type="button"
-                      onClick={() => remove(item.id)}
-                      aria-label={`Eliminar ${item.title}`}
-                      className="text-ink-400 rounded-md p-1 transition hover:text-red-600"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
+                    {manageStructure ? (
+                      <button
+                        type="button"
+                        onClick={() => remove(item.id)}
+                        aria-label={`Eliminar ${item.title}`}
+                        className="text-ink-400 rounded-md p-1 transition hover:text-red-600"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -342,7 +351,7 @@ export function ChecklistPanel({ videoId, initial }: { videoId: string; initial:
         })}
       </ul>
 
-      {editable ? (
+      {manageStructure ? (
         <form onSubmit={add} className="mt-3 space-y-2">
           <Input
             value={title}

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { CalendarCheck, Gauge, Timer, TrendingUp } from "lucide-react";
+import { CalendarCheck, Gauge, Hourglass, Timer, TrendingUp } from "lucide-react";
 
 import { StatCard } from "@/components/dashboard/stat-card";
 import { PageHeader } from "@/components/layout/page-header";
@@ -9,8 +9,10 @@ import { Card, EmptyState, Progress } from "@/components/ui/misc";
 import {
   averageCycleDays,
   byChannel,
+  formatDuration,
   onTimeRate,
   publicationsByMonth,
+  stageBottlenecks,
   stageKindMap,
   workloadByMember,
 } from "@/lib/analytics";
@@ -18,6 +20,7 @@ import { requireWorkspace } from "@/lib/session";
 import {
   getAnalyticsVideos,
   getChannels,
+  getStageDurations,
   getWorkspaceConfig,
   getWorkspaceStats,
   getNotifications,
@@ -28,12 +31,13 @@ export const metadata: Metadata = { title: "Analíticas" };
 export default async function AnalyticsPage() {
   const { workspace, userId } = await requireWorkspace();
 
-  const [videos, channels, config, stats, notifications] = await Promise.all([
+  const [videos, channels, config, stats, notifications, durations] = await Promise.all([
     getAnalyticsVideos(workspace.id),
     getChannels(workspace.id, true),
     getWorkspaceConfig(workspace.id, userId),
     getWorkspaceStats(workspace.id),
     getNotifications(workspace.id),
+    getStageDurations(workspace.id),
   ]);
 
   const members = config.members;
@@ -48,6 +52,9 @@ export default async function AnalyticsPage() {
   const maxLoad = Math.max(1, ...workload.values());
 
   const totalPublished = videos.filter((video) => video.published_at !== null).length;
+  const bottlenecks = stageBottlenecks(durations, config.stages);
+  const slowest = bottlenecks[0];
+  const maxStageHours = Math.max(1, ...bottlenecks.map((entry) => entry.hours));
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -87,6 +94,20 @@ export default async function AnalyticsPage() {
             tone="brand"
             footnote={`${stats.overdue} fuera de plazo`}
             footnoteTone={stats.overdue > 0 ? "danger" : "muted"}
+          />
+        </div>
+
+        <div className="mt-3">
+          <StatCard
+            label="Etapa más lenta"
+            value={slowest ? slowest.name : "-"}
+            icon={Hourglass}
+            tone="amber"
+            footnote={
+              slowest
+                ? `${formatDuration(slowest.hours)} de media por tarjeta`
+                : "Todavía no hay suficientes movimientos medidos"
+            }
           />
         </div>
 
@@ -151,6 +172,46 @@ export default async function AnalyticsPage() {
             )}
           </Card>
         </div>
+
+        <Card className="mt-4 p-4">
+          <h2 className="text-ink-900 text-[15px] font-semibold">
+            Dónde se atasca la producción
+            <span className="text-ink-400 ml-2 text-[12px] font-normal">últimos 90 días</span>
+          </h2>
+          <p className="text-ink-500 mt-0.5 mb-4 text-[12.5px]">
+            Tiempo medio que pasa una tarjeta en cada etapa, contado desde que entra hasta que sale.
+            Las etapas de cierre no cuentan.
+          </p>
+
+          {bottlenecks.length === 0 ? (
+            <EmptyState
+              title="Todavía no hay suficientes datos"
+              description="En cuanto las tarjetas empiecen a moverse entre etapas, aquí aparece el tiempo medio de cada una."
+              className="border-0"
+            />
+          ) : (
+            <ul className="space-y-3">
+              {bottlenecks.map((entry) => (
+                <li key={entry.stageId} className="flex items-center gap-3">
+                  <span className="text-ink-700 w-28 shrink-0 truncate text-[12.5px]">
+                    {entry.name}
+                  </span>
+                  <Progress
+                    value={(entry.hours / maxStageHours) * 100}
+                    color={entry.color}
+                    className="flex-1"
+                  />
+                  <span className="text-ink-900 w-16 shrink-0 text-right text-[12px] font-medium">
+                    {formatDuration(entry.hours)}
+                  </span>
+                  <span className="text-ink-400 w-20 shrink-0 text-right text-[11px]">
+                    {entry.samples} paso{entry.samples === 1 ? "" : "s"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
 
         <Card className="mt-4 p-4">
           <h2 className="text-ink-900 mb-4 text-[15px] font-semibold">Rendimiento por canal</h2>

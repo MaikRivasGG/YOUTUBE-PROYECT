@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { PRIORITIES } from "@/lib/domain/pipeline";
-import type { StageKind, VideoPriority } from "@/types/database";
+import { REQUIRABLE_FIELDS, type StageKind, type VideoPriority } from "@/types/database";
 
 const priorityValues = PRIORITIES.map((p) => p.value) as [VideoPriority, ...VideoPriority[]];
 
@@ -79,6 +79,15 @@ export const stageSchema = z.object({
   name: z.string().trim().min(1, "Escribe un nombre").max(40),
   color: hexColor,
   kind: z.enum(stageKindValues),
+  require_checklist: z.boolean().default(false),
+  required_fields: z.array(z.enum(REQUIRABLE_FIELDS)).default([]),
+});
+
+/** Un paso de la plantilla de produccion de un canal. */
+export const templateItemSchema = z.object({
+  title: z.string().trim().min(1, "Escribe el paso").max(200),
+  stage_id: z.string().uuid().nullable().default(null),
+  role_id: z.string().uuid().nullable().default(null),
 });
 
 export const roleSchema = z.object({
@@ -93,6 +102,7 @@ export const roleSchema = z.object({
   edit_videos: z.boolean().default(true),
   assign_videos: z.boolean().default(false),
   move_any_stage: z.boolean().default(false),
+  manage_checklist: z.boolean().default(false),
   write_comments: z.boolean().default(true),
   stage_ids: z.array(z.string().uuid()).default([]),
 });
@@ -163,3 +173,4 @@ export type ChannelInput = z.infer<typeof channelSchema>;
 export type CreateVideoInput = z.infer<typeof createVideoSchema>;
 export type RoleInput = z.infer<typeof roleSchema>;
 export type StageInput = z.infer<typeof stageSchema>;
+export type TemplateItemInput = z.infer<typeof templateItemSchema>;

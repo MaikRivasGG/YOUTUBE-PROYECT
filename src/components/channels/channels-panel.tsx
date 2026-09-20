@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, ArchiveRestore, Pencil, Plus, MonitorPlay } from "lucide-react";
+import { Archive, ArchiveRestore, ListChecks, Pencil, Plus, MonitorPlay } from "lucide-react";
 import * as React from "react";
 import { useActionState, useTransition } from "react";
 import { toast } from "sonner";
@@ -16,7 +16,8 @@ import {
   setChannelArchivedAction,
   updateChannelAction,
 } from "@/server/actions/channels";
-import type { Channel } from "@/types/database";
+import { TemplateDialog } from "@/components/channels/template-dialog";
+import type { Channel, ChannelTemplateItem } from "@/types/database";
 
 export interface ChannelStats {
   active: number;
@@ -37,12 +38,16 @@ const PALETTE = [
 export function ChannelsPanel({
   channels,
   stats,
+  templates,
 }: {
   channels: Channel[];
   stats: Record<string, ChannelStats>;
+  /** Pasos de plantilla por canal, ya agrupados en el servidor. */
+  templates: Record<string, ChannelTemplateItem[]>;
 }) {
   const { can } = useWorkspace();
   const [editing, setEditing] = React.useState<Channel | null>(null);
+  const [templateOf, setTemplateOf] = React.useState<Channel | null>(null);
   const [creating, setCreating] = React.useState(false);
   const [pending, startTransition] = useTransition();
 
@@ -106,6 +111,15 @@ export function ChannelsPanel({
                     <div className="flex gap-1">
                       <button
                         type="button"
+                        onClick={() => setTemplateOf(channel)}
+                        aria-label={`Plantilla de ${channel.name}`}
+                        title="Plantilla de produccion"
+                        className="text-ink-400 hover:bg-canvas hover:text-ink-900 rounded-lg p-1.5 transition"
+                      >
+                        <ListChecks className="size-3.5" />
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => setEditing(channel)}
                         aria-label={`Editar ${channel.name}`}
                         className="text-ink-400 hover:bg-canvas hover:text-ink-900 rounded-lg p-1.5 transition"
@@ -166,14 +180,25 @@ export function ChannelsPanel({
                   <Progress value={progress} color={channel.color} />
                 </div>
 
-                {channel.is_archived ? (
-                  <p className="text-ink-400 mt-3 text-[11.5px]">Canal archivado</p>
-                ) : null}
+                <p className="text-ink-400 mt-3 text-[11.5px]">
+                  {(templates[channel.id]?.length ?? 0) > 0
+                    ? `Plantilla de ${templates[channel.id].length} pasos`
+                    : "Sin plantilla de produccion"}
+                  {channel.is_archived ? " · Canal archivado" : null}
+                </p>
               </Card>
             );
           })}
         </div>
       )}
+
+      <TemplateDialog
+        key={templateOf?.id ?? "template"}
+        open={Boolean(templateOf)}
+        onOpenChange={(open) => (open ? null : setTemplateOf(null))}
+        channel={templateOf}
+        items={templateOf ? (templates[templateOf.id] ?? []) : []}
+      />
 
       <ChannelDialog open={creating} onOpenChange={setCreating} />
       <ChannelDialog

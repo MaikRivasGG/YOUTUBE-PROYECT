@@ -151,11 +151,16 @@ export async function toggleChecklistAssignee(itemId: string, userId: string, as
 
 // --- Comentarios y archivos ------------------------------------------------
 
-export async function addComment(videoId: string, authorId: string, body: string) {
+export async function addComment(
+  videoId: string,
+  authorId: string,
+  body: string,
+  mentions: string[] = [],
+) {
   const supabase = supabaseBrowser();
   const { data, error } = await supabase
     .from("comments")
-    .insert({ video_id: videoId, author_id: authorId, body })
+    .insert({ video_id: videoId, author_id: authorId, body, mentions })
     .select("*")
     .single();
   if (error) throw error;

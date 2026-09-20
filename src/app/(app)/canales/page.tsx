@@ -3,7 +3,12 @@ import type { Metadata } from "next";
 import { ChannelsPanel, type ChannelStats } from "@/components/channels/channels-panel";
 import { PageHeader } from "@/components/layout/page-header";
 import { requireWorkspace } from "@/lib/session";
-import { getBoardVideos, getChannels, getNotifications } from "@/server/queries";
+import {
+  getBoardVideos,
+  getChannels,
+  getNotifications,
+  getWorkspaceTemplates,
+} from "@/server/queries";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Canales" };
@@ -38,6 +43,10 @@ export default async function ChannelsPage() {
     if (entry && !video.published_at) entry.active += 1;
   }
 
+  const templates = Object.fromEntries(
+    await getWorkspaceTemplates(channels.map((channel) => channel.id)),
+  );
+
   for (const row of published.data ?? []) {
     if (!row.channel_id) continue;
     const entry = stats[row.channel_id];
@@ -52,7 +61,7 @@ export default async function ChannelsPage() {
         notifications={notifications}
       />
       <div className="scrollbar-slim min-h-0 flex-1 overflow-y-auto px-5 py-4 lg:px-7">
-        <ChannelsPanel channels={channels} stats={stats} />
+        <ChannelsPanel channels={channels} stats={stats} templates={templates} />
       </div>
     </div>
   );

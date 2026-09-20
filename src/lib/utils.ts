@@ -65,6 +65,11 @@ const ERROR_DICTIONARY: Record<string, string> = {
 };
 
 function translateError(message: string): string | null {
+  // Este error viaja con la lista de lo que falta, asi que no se traduce a un
+  // texto fijo: se le devuelve al equipo tal cual, que es lo util.
+  const missing = message.match(/STAGE_REQUIREMENTS_MISSING:\s*(.+)/);
+  if (missing) return `Antes de avanzar falta: ${missing[1].trim()}`;
+
   for (const [key, value] of Object.entries(ERROR_DICTIONARY)) {
     if (message.includes(key)) return value;
   }

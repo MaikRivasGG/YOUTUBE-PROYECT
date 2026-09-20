@@ -1,4 +1,4 @@
-import type { Stage, StageKind, VideoPriority } from "@/types/database";
+import type { RequirableField, Stage, StageKind, VideoPriority } from "@/types/database";
 
 /**
  * Que significa cada tipo de etapa para el sistema. El nombre de la columna lo
@@ -92,4 +92,38 @@ export function needsRebalance(a: number, b: number): boolean {
 /** Color de fondo suave a partir del color de una etapa o canal. */
 export function tint(color: string, alpha = "1a"): string {
   return `${color}${alpha}`;
+}
+
+/**
+ * Campos que una etapa puede exigir antes de dejar avanzar una tarjeta.
+ *
+ * Espejo de la lista cerrada del CHECK `stages_required_fields_known` y del
+ * CASE de `public.stage_exit_blockers()`. Si aqui aparece uno que alla no
+ * existe, la base lo rechaza al guardar.
+ */
+export const REQUIRABLE_FIELD_LABELS: { value: RequirableField; label: string }[] = [
+  { value: "script_body", label: "Guion" },
+  { value: "hook", label: "Hook" },
+  { value: "description", label: "Descripcion" },
+  { value: "thumbnail_url", label: "Miniatura" },
+  { value: "youtube_url", label: "Enlace de YouTube" },
+  { value: "channel_id", label: "Canal" },
+  { value: "due_date", label: "Fecha limite" },
+  { value: "publish_at", label: "Fecha de publicacion" },
+  { value: "assignee", label: "Alguien asignado" },
+  { value: "asset", label: "Algun archivo" },
+];
+
+/** Resumen corto de los requisitos de una etapa, para listarla. */
+export function stageRequirementsSummary(stage: Stage): string | null {
+  const parts: string[] = [];
+
+  if (stage.require_checklist) parts.push("checklist cerrado");
+
+  for (const field of stage.required_fields ?? []) {
+    const label = REQUIRABLE_FIELD_LABELS.find((item) => item.value === field)?.label;
+    if (label) parts.push(label.toLowerCase());
+  }
+
+  return parts.length === 0 ? null : `Exige ${parts.join(", ")}`;
 }

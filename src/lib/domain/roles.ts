@@ -18,6 +18,7 @@ export const PERMISSIONS = [
   "video.edit",
   "video.assign",
   "video.move.any",
+  "checklist.manage",
   "comment.write",
 ] as const;
 
@@ -34,6 +35,7 @@ export type PermissionFlag =
   | "edit_videos"
   | "assign_videos"
   | "move_any_stage"
+  | "manage_checklist"
   | "write_comments";
 
 const FLAG_BY_PERMISSION: Record<Exclude<Permission, "workspace.delete">, PermissionFlag> = {
@@ -46,6 +48,7 @@ const FLAG_BY_PERMISSION: Record<Exclude<Permission, "workspace.delete">, Permis
   "video.edit": "edit_videos",
   "video.assign": "assign_videos",
   "video.move.any": "move_any_stage",
+  "checklist.manage": "manage_checklist",
   "comment.write": "write_comments",
 };
 
@@ -119,6 +122,11 @@ export const PERMISSION_FIELDS: {
     flag: "move_any_stage",
     label: "Mover cualquier etapa",
     description: "Saltarse el reparto por etapas y mover cualquier tarjeta.",
+  },
+  {
+    flag: "manage_checklist",
+    label: "Gestionar el checklist",
+    description: "Anadir, reordenar y borrar pasos. Marcarlos sigue siendo cosa del rol del paso.",
   },
   {
     flag: "manage_channels",

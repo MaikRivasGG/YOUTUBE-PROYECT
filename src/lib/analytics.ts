@@ -114,3 +114,52 @@ export function onTimeRate(videos: AnalyticsVideo[]): number | null {
 
   return Math.round((onTime / withDeadline.length) * 100);
 }
+
+export interface StageBottleneck {
+  stageId: string;
+  name: string;
+  color: string;
+  /** Tiempo medio que pasa una tarjeta en la etapa, en horas. */
+  hours: number;
+  /** Cuantos pasos por la etapa sostienen la media. */
+  samples: number;
+}
+
+/** Formatea horas como "3 h" o "2,5 d", que es como lo lee una persona. */
+export function formatDuration(hours: number): string {
+  if (hours < 1) return "menos de 1 h";
+  if (hours < 48) return `${Math.round(hours)} h`;
+  const days = hours / 24;
+  return `${days.toFixed(1).replace(".", ",")} d`;
+}
+
+/**
+ * Cuello de botella: donde se queda parada la produccion.
+ *
+ * Cruza los tiempos medidos en la base con las etapas del pipeline para poder
+ * pintarlas con su nombre y su color, y las ordena de mas lenta a mas rapida.
+ * Se descartan las etapas terminales: que una tarjeta lleve un mes en
+ * "Publicado" no es un atasco.
+ */
+export function stageBottlenecks(
+  durations: { stage_id: string; avg_hours: number; samples: number }[],
+  stages: Stage[],
+): StageBottleneck[] {
+  const index = new Map(stages.map((stage) => [stage.id, stage]));
+
+  return durations
+    .flatMap((row) => {
+      const stage = index.get(row.stage_id);
+      if (!stage || CLOSED.includes(stage.kind)) return [];
+      return [
+        {
+          stageId: stage.id,
+          name: stage.name,
+          color: stage.color,
+          hours: Number(row.avg_hours) || 0,
+          samples: Number(row.samples) || 0,
+        },
+      ];
+    })
+    .sort((a, b) => b.hours - a.hours);
+}

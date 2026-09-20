@@ -143,6 +143,8 @@ export async function createStageAction(_prev: State, formData: FormData): Promi
     name: formData.get("name"),
     color: formData.get("color") ?? "#94a3b8",
     kind: formData.get("kind") ?? "work",
+    require_checklist: formData.get("require_checklist") === "on",
+    required_fields: formData.getAll("required_fields").map(String),
   });
   if (!pipelineId) return fail("Pipeline no valido");
   if (!parsed.success) return fail("Revisa los datos", zodFieldErrors(parsed.error));
@@ -165,6 +167,8 @@ export async function createStageAction(_prev: State, formData: FormData): Promi
     slug: `${base}-${Math.random().toString(36).slice(2, 6)}`,
     color: parsed.data.color,
     kind: parsed.data.kind,
+    require_checklist: parsed.data.require_checklist,
+    required_fields: parsed.data.required_fields,
     position: (last?.position ?? 0) + 1000,
   });
 
@@ -179,6 +183,8 @@ export async function updateStageAction(_prev: State, formData: FormData): Promi
     name: formData.get("name"),
     color: formData.get("color") ?? "#94a3b8",
     kind: formData.get("kind") ?? "work",
+    require_checklist: formData.get("require_checklist") === "on",
+    required_fields: formData.getAll("required_fields").map(String),
   });
   if (!id) return fail("Etapa no valida");
   if (!parsed.success) return fail("Revisa los datos", zodFieldErrors(parsed.error));
