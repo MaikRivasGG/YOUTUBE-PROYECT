@@ -16,7 +16,9 @@ function readForm(formData: FormData) {
     handle: formData.get("handle") ?? "",
     niche: formData.get("niche") ?? "",
     color: formData.get("color") ?? "#ef4444",
+    image_url: formData.get("image_url") ?? "",
     youtube_url: formData.get("youtube_url") ?? "",
+    pipeline_id: formData.get("pipeline_id") || null,
     target_per_week: formData.get("target_per_week") ?? 3,
   };
 }

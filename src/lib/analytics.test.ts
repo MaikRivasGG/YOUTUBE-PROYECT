@@ -8,11 +8,20 @@ import {
   workloadByMember,
 } from "@/lib/analytics";
 import type { AnalyticsVideo } from "@/server/queries";
+import type { StageKind } from "@/types/database";
+
+/** Etapas de ejemplo: el id coincide con su tipo para que se lea facil. */
+const kinds = new Map<string, StageKind>([
+  ["idea", "backlog"],
+  ["editing", "work"],
+  ["published", "done"],
+  ["archived", "archived"],
+]);
 
 function video(overrides: Partial<AnalyticsVideo> & { id: string }): AnalyticsVideo {
   return {
     channel_id: null,
-    status: "idea",
+    stage_id: "idea",
     created_at: "2025-01-01T00:00:00Z",
     published_at: null,
     due_date: null,
@@ -64,11 +73,18 @@ describe("averageCycleDays", () => {
 
 describe("workloadByMember", () => {
   it("solo cuenta tarjetas vivas", () => {
-    const load = workloadByMember([
-      video({ id: "a", status: "editing", video_assignees: [{ user_id: "u1" }] }),
-      video({ id: "b", status: "published", video_assignees: [{ user_id: "u1" }] }),
-      video({ id: "c", status: "idea", video_assignees: [{ user_id: "u1" }, { user_id: "u2" }] }),
-    ]);
+    const load = workloadByMember(
+      [
+        video({ id: "a", stage_id: "editing", video_assignees: [{ user_id: "u1" }] }),
+        video({ id: "b", stage_id: "published", video_assignees: [{ user_id: "u1" }] }),
+        video({
+          id: "c",
+          stage_id: "idea",
+          video_assignees: [{ user_id: "u1" }, { user_id: "u2" }],
+        }),
+      ],
+      kinds,
+    );
 
     expect(load.get("u1")).toBe(2);
     expect(load.get("u2")).toBe(1);
@@ -77,12 +93,15 @@ describe("workloadByMember", () => {
 
 describe("byChannel", () => {
   it("separa activos y publicados, e ignora archivados", () => {
-    const result = byChannel([
-      video({ id: "a", channel_id: "c1", status: "editing" }),
-      video({ id: "b", channel_id: "c1", status: "published" }),
-      video({ id: "c", channel_id: "c1", status: "archived" }),
-      video({ id: "d", status: "idea" }),
-    ]);
+    const result = byChannel(
+      [
+        video({ id: "a", channel_id: "c1", stage_id: "editing" }),
+        video({ id: "b", channel_id: "c1", stage_id: "published" }),
+        video({ id: "c", channel_id: "c1", stage_id: "archived" }),
+        video({ id: "d", stage_id: "idea" }),
+      ],
+      kinds,
+    );
 
     expect(result.get("c1")).toEqual({ active: 1, published: 1 });
     expect(result.get("sin-canal")).toEqual({ active: 1, published: 0 });
@@ -92,7 +111,7 @@ describe("byChannel", () => {
 describe("onTimeRate", () => {
   it("es null si no hay publicados con fecha limite", () => {
     expect(
-      onTimeRate([video({ id: "a", status: "published", published_at: "2025-01-01T00:00:00Z" })]),
+      onTimeRate([video({ id: "a", stage_id: "published", published_at: "2025-01-01T00:00:00Z" })]),
     ).toBeNull();
   });
 

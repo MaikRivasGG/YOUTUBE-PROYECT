@@ -19,6 +19,8 @@ export type ConnectionState = "connecting" | "live" | "offline";
 export function useRealtimeBoard(
   workspaceId: string,
   initial: BoardVideo[],
+  /** Etapas que no se pintan en el tablero (las de tipo archivado). */
+  hiddenStageIds: ReadonlySet<string> = new Set(),
 ): {
   videos: BoardVideo[];
   setVideos: React.Dispatch<React.SetStateAction<BoardVideo[]>>;
@@ -58,8 +60,8 @@ export function useRealtimeBoard(
             }
 
             const video = payload.new as BoardVideo;
-            // Los archivados desaparecen del tablero.
-            if (video.status === "archived") {
+            // Lo que cae en una etapa archivada desaparece del tablero.
+            if (hiddenStageIds.has(video.stage_id)) {
               return applyRealtimeEvent(current, { type: "DELETE", id: video.id });
             }
 
@@ -119,7 +121,7 @@ export function useRealtimeBoard(
     return () => {
       if (channel) supabase.removeChannel(channel);
     };
-  }, [workspaceId]);
+  }, [workspaceId, hiddenStageIds]);
 
   return { videos, setVideos, connection };
 }

@@ -11,7 +11,7 @@ import { UserMenu } from "@/components/layout/user-menu";
 import { WorkspaceSwitcher, type SwitcherWorkspace } from "@/components/layout/workspace-switcher";
 import { Dot } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import type { Channel, Profile, WorkspaceRole } from "@/types/database";
+import type { Channel, Profile, Role } from "@/types/database";
 
 export interface SidebarProps {
   workspaces: SwitcherWorkspace[];
@@ -19,7 +19,7 @@ export interface SidebarProps {
   summary: string;
   channels: Channel[];
   profile: Profile;
-  role: WorkspaceRole | null;
+  myRoles: Role[];
   productionCount: number;
 }
 
@@ -146,7 +146,7 @@ export function Sidebar(props: SidebarProps) {
         </nav>
 
         <div className="border-sidebar-line border-t p-2">
-          <UserMenu profile={props.profile} role={props.role} />
+          <UserMenu profile={props.profile} roles={props.myRoles} />
         </div>
       </aside>
     </>

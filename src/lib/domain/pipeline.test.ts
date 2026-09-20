@@ -2,11 +2,28 @@ import { describe, expect, it } from "vitest";
 
 import {
   POSITION_STEP,
+  boardStages,
   needsRebalance,
   positionBetween,
   positionForIndex,
-  stageMeta,
+  sortStages,
+  stageKindLabel,
 } from "@/lib/domain/pipeline";
+import type { Stage, StageKind } from "@/types/database";
+
+function stage(slug: string, position: number, kind: StageKind = "work"): Stage {
+  return {
+    id: slug,
+    pipeline_id: "pipe",
+    name: slug,
+    slug,
+    color: "#000000",
+    kind,
+    position,
+    created_at: "2025-01-01T00:00:00Z",
+    updated_at: "2025-01-01T00:00:00Z",
+  };
+}
 
 describe("positionBetween", () => {
   it("usa el paso por defecto cuando la columna esta vacia", () => {
@@ -17,7 +34,7 @@ describe("positionBetween", () => {
     expect(positionBetween(null, 1000)).toBe(0);
   });
 
-  it("coloca despues de la última tarjeta", () => {
+  it("coloca despues de la ultima tarjeta", () => {
     expect(positionBetween(3000, null)).toBe(4000);
   });
 
@@ -29,15 +46,9 @@ describe("positionBetween", () => {
 describe("positionForIndex", () => {
   const positions = [1000, 2000, 3000];
 
-  it("inserta al principio", () => {
+  it("inserta al principio, en medio y al final", () => {
     expect(positionForIndex(positions, 0)).toBe(0);
-  });
-
-  it("inserta en medio", () => {
     expect(positionForIndex(positions, 1)).toBe(1500);
-  });
-
-  it("inserta al final", () => {
     expect(positionForIndex(positions, positions.length)).toBe(4000);
   });
 
@@ -53,13 +64,29 @@ describe("needsRebalance", () => {
   });
 });
 
-describe("stageMeta", () => {
-  it("devuelve la etapa archivada para estados fuera del tablero", () => {
-    expect(stageMeta("archived").label).toBe("Archivado");
+describe("etapas", () => {
+  const stages = [
+    stage("published", 3000, "done"),
+    stage("idea", 1000, "backlog"),
+    stage("archived", 4000, "archived"),
+    stage("script", 2000),
+  ];
+
+  it("ordena por posicion", () => {
+    expect(sortStages(stages).map((s) => s.slug)).toEqual([
+      "idea",
+      "script",
+      "published",
+      "archived",
+    ]);
   });
 
-  it("traduce las etapas del pipeline", () => {
-    expect(stageMeta("voiceover").label).toBe("Grabación");
-    expect(stageMeta("thumbnail").label).toBe("Miniatura");
+  it("el tablero deja fuera lo archivado", () => {
+    expect(boardStages(stages).map((s) => s.slug)).toEqual(["idea", "script", "published"]);
+  });
+
+  it("traduce el tipo de etapa", () => {
+    expect(stageKindLabel("done")).toBe("Publicado");
+    expect(stageKindLabel("review")).toBe("Revision");
   });
 });

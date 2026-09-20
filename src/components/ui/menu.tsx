@@ -70,6 +70,7 @@ export function MenuItem({
         destructive
           ? "text-red-600 hover:bg-red-50"
           : "text-ink-700 hover:bg-canvas hover:text-ink-900",
+        "disabled:pointer-events-none disabled:opacity-40",
         className,
       )}
       {...props}

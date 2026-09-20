@@ -1,23 +1,20 @@
 import { z } from "zod";
 
 import { PRIORITIES } from "@/lib/domain/pipeline";
-import { ROLES } from "@/lib/domain/roles";
-import type { VideoPriority, VideoStatus, WorkspaceRole } from "@/types/database";
+import type { StageKind, VideoPriority } from "@/types/database";
 
-const roleValues = ROLES.map((role) => role.value) as [WorkspaceRole, ...WorkspaceRole[]];
 const priorityValues = PRIORITIES.map((p) => p.value) as [VideoPriority, ...VideoPriority[]];
 
-export const statusValues: [VideoStatus, ...VideoStatus[]] = [
-  "idea",
-  "script",
-  "voiceover",
-  "editing",
-  "thumbnail",
+const stageKindValues: [StageKind, ...StageKind[]] = [
+  "backlog",
+  "work",
   "review",
   "scheduled",
-  "published",
+  "done",
   "archived",
 ];
+
+const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Color hexadecimal no valido");
 
 const optionalText = (max: number) =>
   z
@@ -41,12 +38,12 @@ export const emailSchema = z.string().trim().toLowerCase().email("Email no valid
 
 export const passwordSchema = z
   .string()
-  .min(8, "Mínimo 8 caracteres")
-  .max(72, "Máximo 72 caracteres");
+  .min(8, "Minimo 8 caracteres")
+  .max(72, "Maximo 72 caracteres");
 
 export const loginSchema = z.object({
   email: emailSchema,
-  password: z.string().min(1, "Escribe tu contraseña"),
+  password: z.string().min(1, "Escribe tu contrasena"),
 });
 
 export const signupSchema = z.object({
@@ -58,32 +55,64 @@ export const signupSchema = z.object({
 export const requestResetSchema = z.object({ email: emailSchema });
 
 export const updatePasswordSchema = z
-  .object({
-    password: passwordSchema,
-    confirm: z.string(),
-  })
+  .object({ password: passwordSchema, confirm: z.string() })
   .refine((data) => data.password === data.confirm, {
-    message: "Las contraseñas no coinciden",
+    message: "Las contrasenas no coinciden",
     path: ["confirm"],
   });
 
 export const createWorkspaceSchema = z.object({
-  name: z.string().trim().min(2, "Mínimo 2 caracteres").max(60),
+  name: z.string().trim().min(2, "Minimo 2 caracteres").max(60),
+});
+
+export const deleteWorkspaceSchema = z.object({
+  /** Se escribe el nombre del equipo para confirmar. */
+  confirmation: z.string().trim().min(1, "Escribe el nombre del equipo"),
+});
+
+export const pipelineSchema = z.object({
+  name: z.string().trim().min(2, "Minimo 2 caracteres").max(60),
+  description: optionalText(200),
+});
+
+export const stageSchema = z.object({
+  name: z.string().trim().min(1, "Escribe un nombre").max(40),
+  color: hexColor,
+  kind: z.enum(stageKindValues),
+});
+
+export const roleSchema = z.object({
+  name: z.string().trim().min(2, "Minimo 2 caracteres").max(40),
+  color: hexColor,
+  manage_workspace: z.boolean().default(false),
+  manage_members: z.boolean().default(false),
+  manage_channels: z.boolean().default(false),
+  manage_pipelines: z.boolean().default(false),
+  create_videos: z.boolean().default(false),
+  delete_videos: z.boolean().default(false),
+  edit_videos: z.boolean().default(true),
+  assign_videos: z.boolean().default(false),
+  move_any_stage: z.boolean().default(false),
+  write_comments: z.boolean().default(true),
+  stage_ids: z.array(z.string().uuid()).default([]),
 });
 
 export const channelSchema = z.object({
-  name: z.string().trim().min(2, "Mínimo 2 caracteres").max(80),
+  name: z.string().trim().min(2, "Minimo 2 caracteres").max(80),
   handle: optionalText(40),
   niche: optionalText(60),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Color hexadecimal no valido"),
+  color: hexColor,
+  image_url: optionalUrl,
   youtube_url: optionalUrl,
+  pipeline_id: z.string().uuid().nullable().optional(),
   target_per_week: z.coerce.number().int().min(0).max(100),
 });
 
 export const createVideoSchema = z.object({
-  title: z.string().trim().min(2, "Escribe un título").max(160),
+  title: z.string().trim().min(2, "Escribe un titulo").max(160),
   channel_id: z.string().uuid().nullable().optional(),
-  status: z.enum(statusValues).default("idea"),
+  pipeline_id: z.string().uuid("Elige un pipeline"),
+  stage_id: z.string().uuid("Elige una etapa"),
   priority: z.enum(priorityValues).default("normal"),
   hook: optionalText(300),
   due_date: z
@@ -95,29 +124,9 @@ export const createVideoSchema = z.object({
     .or(z.literal("").transform(() => null)),
 });
 
-export const updateVideoSchema = z.object({
-  id: z.string().uuid(),
-  title: z.string().trim().min(2).max(160).optional(),
-  channel_id: z.string().uuid().nullable().optional(),
-  priority: z.enum(priorityValues).optional(),
-  hook: optionalText(300),
-  description: optionalText(4000),
-  script_body: optionalText(40000),
-  youtube_url: optionalUrl,
-  thumbnail_url: optionalUrl,
-  due_date: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .nullable()
-    .optional()
-    .or(z.literal("").transform(() => null)),
-  publish_at: z.string().datetime({ offset: true }).nullable().optional(),
-  tags: z.array(z.string().trim().min(1).max(30)).max(12).optional(),
-});
-
 export const moveVideoSchema = z.object({
   id: z.string().uuid(),
-  status: z.enum(statusValues),
+  stage_id: z.string().uuid(),
   position: z.number().finite(),
 });
 
@@ -129,8 +138,8 @@ export const commentSchema = z.object({
 export const checklistItemSchema = z.object({
   video_id: z.string().uuid(),
   title: z.string().trim().min(1, "Escribe la tarea").max(200),
-  stage: z.enum(statusValues).nullable().optional(),
-  assignee_id: z.string().uuid().nullable().optional(),
+  stage_id: z.string().uuid().nullable().optional(),
+  role_id: z.string().uuid().nullable().optional(),
 });
 
 export const assetSchema = z.object({
@@ -142,18 +151,15 @@ export const assetSchema = z.object({
 
 export const inviteSchema = z.object({
   email: emailSchema,
-  role: z
-    .enum(roleValues)
-    .refine((role) => role !== "owner", "No se puede invitar como propietario"),
+  role_id: z.string().uuid("Elige un rol"),
 });
 
-export const changeRoleSchema = z.object({
+export const memberRolesSchema = z.object({
   user_id: z.string().uuid(),
-  role: z.enum(roleValues),
+  role_ids: z.array(z.string().uuid()).max(12),
 });
 
-export type LoginInput = z.infer<typeof loginSchema>;
-export type SignupInput = z.infer<typeof signupSchema>;
 export type ChannelInput = z.infer<typeof channelSchema>;
 export type CreateVideoInput = z.infer<typeof createVideoSchema>;
-export type UpdateVideoInput = z.infer<typeof updateVideoSchema>;
+export type RoleInput = z.infer<typeof roleSchema>;
+export type StageInput = z.infer<typeof stageSchema>;

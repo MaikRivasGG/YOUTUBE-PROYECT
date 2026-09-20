@@ -5,28 +5,24 @@ import { redirect } from "next/navigation";
 import { cache } from "react";
 
 import { supabaseServer } from "@/lib/supabase/server";
-import type { Profile, Workspace, WorkspaceRole } from "@/types/database";
+import type { Profile, Workspace } from "@/types/database";
 
 export const WORKSPACE_COOKIE = "fh_workspace";
-
-export interface WorkspaceSummary extends Workspace {
-  role: WorkspaceRole;
-}
 
 export interface SessionContext {
   userId: string;
   email: string;
   profile: Profile;
-  workspaces: WorkspaceSummary[];
-  /** Workspace activo, o null si el usuario aún no pertenece a ninguno. */
-  workspace: WorkspaceSummary | null;
-  role: WorkspaceRole | null;
+  workspaces: Workspace[];
+  /** Workspace activo, o null si el usuario aun no pertenece a ninguno. */
+  workspace: Workspace | null;
 }
 
 /**
- * Contexto de sesión cacheado por peticion: usuario, perfil, equipos a los que
+ * Contexto de sesion cacheado por peticion: usuario, perfil, equipos a los que
  * pertenece y equipo activo (cookie `fh_workspace`, con el primero como
- * respaldo).
+ * respaldo). Los roles ya no viven aqui: los carga el layout de la aplicacion,
+ * porque un miembro puede tener varios.
  */
 export const getSessionContext = cache(async (): Promise<SessionContext | null> => {
   const supabase = await supabaseServer();
@@ -40,15 +36,15 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
     supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
     supabase
       .from("workspace_members")
-      .select("role, workspaces(*)")
+      .select("workspaces(*)")
       .eq("user_id", user.id)
       .order("created_at", { ascending: true }),
   ]);
 
-  const workspaces: WorkspaceSummary[] = (memberships ?? [])
+  const workspaces: Workspace[] = (memberships ?? [])
     .flatMap((membership) => {
       const workspace = membership.workspaces as unknown as Workspace | null;
-      return workspace ? [{ ...workspace, role: membership.role }] : [];
+      return workspace ? [workspace] : [];
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 
@@ -69,22 +65,19 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
     },
     workspaces,
     workspace,
-    role: workspace?.role ?? null,
   };
 });
 
-/** Exige sesión; redirige a /login si no la hay. */
+/** Exige sesion; redirige a /login si no la hay. */
 export async function requireSession(): Promise<SessionContext> {
   const context = await getSessionContext();
   if (!context) redirect("/login");
   return context;
 }
 
-/** Exige sesión y equipo activo; redirige al onboarding si no hay equipo. */
-export async function requireWorkspace(): Promise<
-  SessionContext & { workspace: WorkspaceSummary; role: WorkspaceRole }
-> {
+/** Exige sesion y equipo activo; redirige al onboarding si no hay equipo. */
+export async function requireWorkspace(): Promise<SessionContext & { workspace: Workspace }> {
   const context = await requireSession();
   if (!context.workspace) redirect("/bienvenida");
-  return { ...context, workspace: context.workspace, role: context.workspace.role };
+  return { ...context, workspace: context.workspace };
 }

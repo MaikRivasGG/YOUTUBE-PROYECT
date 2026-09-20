@@ -20,7 +20,6 @@ import { Dot } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/misc";
 import { useRealtimeBoard } from "@/hooks/use-realtime-board";
-import { stageMeta } from "@/lib/domain/pipeline";
 import { cn } from "@/lib/utils";
 import type { BoardVideo } from "@/server/queries";
 
@@ -32,7 +31,7 @@ function calendarDate(video: BoardVideo): string | null {
 }
 
 export function EditorialCalendar({ initialVideos }: { initialVideos: BoardVideo[] }) {
-  const { workspaceId, channelById } = useWorkspace();
+  const { workspaceId, channelById, stageById } = useWorkspace();
   const { videos } = useRealtimeBoard(workspaceId, initialVideos);
   const [cursor, setCursor] = React.useState(() => startOfMonth(new Date()));
 
@@ -136,7 +135,7 @@ export function EditorialCalendar({ initialVideos }: { initialVideos: BoardVideo
                     <li key={video.id}>
                       <Link
                         href={`/videos/${video.id}`}
-                        title={`${video.title} - ${stageMeta(video.status).label}`}
+                        title={`${video.title} · ${stageById(video.stage_id)?.name ?? ""}`}
                         className="hover:bg-canvas flex items-center gap-1 rounded px-1 py-0.5 transition"
                       >
                         <Dot color={channel?.color ?? "#cbd5e1"} className="size-1.5" />

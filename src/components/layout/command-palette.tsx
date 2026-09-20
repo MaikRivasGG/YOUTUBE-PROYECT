@@ -7,16 +7,14 @@ import * as React from "react";
 import { useWorkspace } from "@/components/providers/workspace-provider";
 import { Dialog } from "@/components/ui/dialog";
 import { Dot } from "@/components/ui/badge";
-import { stageMeta } from "@/lib/domain/pipeline";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-import type { VideoStatus } from "@/types/database";
 
 interface Hit {
   id: string;
   ref: string;
   title: string;
-  status: VideoStatus;
+  stage_id: string;
   channel_id: string | null;
 }
 
@@ -28,7 +26,7 @@ export function CommandPalette({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { workspaceId, channelById } = useWorkspace();
+  const { workspaceId, channelById, stageById } = useWorkspace();
   const router = useRouter();
   const [query, setQuery] = React.useState("");
   const [hits, setHits] = React.useState<Hit[]>([]);
@@ -65,7 +63,7 @@ export function CommandPalette({
 
       const { data } = await supabase
         .from("videos")
-        .select("id, ref, title, status, channel_id")
+        .select("id, ref, title, stage_id, channel_id")
         .eq("workspace_id", workspaceId)
         .or(`title.ilike.%${safeTerm}%,ref.ilike.%${safeTerm}%`)
         .limit(8);
@@ -151,7 +149,7 @@ export function CommandPalette({
                       {hit.title}
                     </span>
                     <span className="text-ink-400 block text-[11px]">
-                      {hit.ref} - {stageMeta(hit.status).label}
+                      {hit.ref} · {stageById(hit.stage_id)?.name ?? "Sin etapa"}
                     </span>
                   </span>
                   {index === active ? (

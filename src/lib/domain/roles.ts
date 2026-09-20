@@ -1,17 +1,18 @@
-import type { VideoStatus, WorkspaceRole } from "@/types/database";
+import type { Role } from "@/types/database";
 
 /**
- * Matriz de permisos del cliente.
+ * Permisos del cliente.
  *
- * IMPORTANTE: esto solo sirve para decidir que se pinta en la interfaz. La
- * autoridad real es la funcion public.has_permission() de Postgres, que se
- * aplica en cada politica RLS. Ambas matrices deben mantenerse sincronizadas.
+ * Solo sirven para decidir que se pinta. La autoridad es la funcion
+ * public.has_permission() de Postgres, que suma los permisos de todos los
+ * roles del miembro igual que se hace aqui.
  */
 export const PERMISSIONS = [
   "workspace.manage",
   "workspace.delete",
   "member.manage",
   "channel.manage",
+  "pipeline.manage",
   "video.create",
   "video.delete",
   "video.edit",
@@ -22,137 +23,131 @@ export const PERMISSIONS = [
 
 export type Permission = (typeof PERMISSIONS)[number];
 
-const ALL_BUT_VIEWER: WorkspaceRole[] = [
-  "owner",
-  "admin",
-  "producer",
-  "writer",
-  "voice",
-  "editor",
-  "designer",
-  "publisher",
-];
+/** Columna booleana de `roles` que concede cada permiso. */
+export type PermissionFlag =
+  | "manage_workspace"
+  | "manage_members"
+  | "manage_channels"
+  | "manage_pipelines"
+  | "create_videos"
+  | "delete_videos"
+  | "edit_videos"
+  | "assign_videos"
+  | "move_any_stage"
+  | "write_comments";
 
-const MATRIX: Record<Permission, WorkspaceRole[]> = {
-  "workspace.manage": ["owner", "admin"],
-  "workspace.delete": ["owner"],
-  "member.manage": ["owner", "admin"],
-  "channel.manage": ["owner", "admin", "producer"],
-  "video.create": ["owner", "admin", "producer", "writer"],
-  "video.delete": ["owner", "admin", "producer"],
-  "video.edit": ALL_BUT_VIEWER,
-  "video.assign": ["owner", "admin", "producer"],
-  "video.move.any": ["owner", "admin", "producer"],
-  "comment.write": ALL_BUT_VIEWER,
+const FLAG_BY_PERMISSION: Record<Exclude<Permission, "workspace.delete">, PermissionFlag> = {
+  "workspace.manage": "manage_workspace",
+  "member.manage": "manage_members",
+  "channel.manage": "manage_channels",
+  "pipeline.manage": "manage_pipelines",
+  "video.create": "create_videos",
+  "video.delete": "delete_videos",
+  "video.edit": "edit_videos",
+  "video.assign": "assign_videos",
+  "video.move.any": "move_any_stage",
+  "comment.write": "write_comments",
 };
 
-export function can(role: WorkspaceRole | null | undefined, permission: Permission): boolean {
-  if (!role) return false;
-  return MATRIX[permission].includes(role);
+export function isOwner(roles: Role[]): boolean {
+  return roles.some((role) => role.key === "owner");
 }
 
-/** Rol responsable de cada etapa del pipeline (espejo de public.stage_role). */
-export const STAGE_ROLE: Record<VideoStatus, WorkspaceRole> = {
-  idea: "producer",
-  script: "writer",
-  voiceover: "voice",
-  editing: "editor",
-  thumbnail: "designer",
-  review: "producer",
-  scheduled: "publisher",
-  published: "publisher",
-  archived: "producer",
-};
+/** Un permiso se concede si CUALQUIERA de los roles del miembro lo concede. */
+export function can(roles: Role[], permission: Permission): boolean {
+  if (permission === "workspace.delete") return isOwner(roles);
+  const flag = FLAG_BY_PERMISSION[permission];
+  return roles.some((role) => role[flag]);
+}
 
 /**
- * Espejo de public.can_move_video(): un miembro mueve una tarjeta si puede
- * mover cualquiera, si esta asignado a ella, o si su rol es responsable de la
- * etapa de origen o de destino.
+ * Espejo de public.can_move_video().
+ *
+ * Mueve quien puede mover cualquier tarjeta, quien la tiene asignada, y quien
+ * gestiona la etapa de origen o la de destino por alguno de sus roles.
  */
 export function canMoveVideo(params: {
-  role: WorkspaceRole | null | undefined;
+  roles: Role[];
+  /** Etapas que gestionan los roles del usuario. */
+  managedStageIds: ReadonlySet<string>;
   userId: string;
   assigneeIds: string[];
-  from: VideoStatus;
-  to: VideoStatus;
+  fromStageId: string;
+  toStageId: string;
 }): boolean {
-  const { role, userId, assigneeIds, from, to } = params;
-  if (!role || role === "viewer") return false;
-  if (can(role, "video.move.any")) return true;
+  const { roles, managedStageIds, userId, assigneeIds, fromStageId, toStageId } = params;
+
+  if (!can(roles, "video.edit")) return false;
+  if (can(roles, "video.move.any")) return true;
   if (assigneeIds.includes(userId)) return true;
-  return role === STAGE_ROLE[from] || role === STAGE_ROLE[to];
+
+  return managedStageIds.has(fromStageId) || managedStageIds.has(toStageId);
 }
 
-export interface RoleMeta {
-  value: WorkspaceRole;
+/** Permisos editables desde el editor de roles, en el orden en que se muestran. */
+export const PERMISSION_FIELDS: {
+  flag: PermissionFlag;
   label: string;
   description: string;
-  /** Clases Tailwind para el chip del rol. */
-  chip: string;
-}
-
-export const ROLES: RoleMeta[] = [
+}[] = [
   {
-    value: "owner",
-    label: "Propietario",
-    description: "Control total del equipo, incluida su eliminación.",
-    chip: "bg-amber-50 text-amber-700 ring-amber-200",
+    flag: "edit_videos",
+    label: "Editar videos",
+    description: "Cambiar titulo, guion, fechas y archivos de una tarjeta.",
   },
   {
-    value: "admin",
-    label: "Administrador",
-    description: "Gestiona miembros, canales y toda la producción.",
-    chip: "bg-rose-50 text-rose-700 ring-rose-200",
+    flag: "write_comments",
+    label: "Comentar",
+    description: "Dejar feedback en la ficha de los videos.",
   },
   {
-    value: "producer",
-    label: "Productor",
-    description: "Crea videos, asigna trabajo y mueve cualquier tarjeta.",
-    chip: "bg-orange-50 text-orange-700 ring-orange-200",
+    flag: "create_videos",
+    label: "Crear videos",
+    description: "Anadir tarjetas nuevas al tablero.",
   },
   {
-    value: "writer",
-    label: "Guionista",
-    description: "Responsable de la etapa de guion.",
-    chip: "bg-blue-50 text-blue-700 ring-blue-200",
+    flag: "delete_videos",
+    label: "Eliminar videos",
+    description: "Borrar tarjetas y su historial.",
   },
   {
-    value: "voice",
-    label: "Locutor",
-    description: "Responsable de la voz en off y la grabación.",
-    chip: "bg-red-50 text-red-700 ring-red-200",
+    flag: "assign_videos",
+    label: "Asignar personas",
+    description: "Poner y quitar responsables en las tarjetas.",
   },
   {
-    value: "editor",
-    label: "Editor",
-    description: "Responsable del montaje y la edición.",
-    chip: "bg-violet-50 text-violet-700 ring-violet-200",
+    flag: "move_any_stage",
+    label: "Mover cualquier etapa",
+    description: "Saltarse el reparto por etapas y mover cualquier tarjeta.",
   },
   {
-    value: "designer",
-    label: "Diseñador",
-    description: "Responsable de miniaturas y arte del canal.",
-    chip: "bg-fuchsia-50 text-fuchsia-700 ring-fuchsia-200",
+    flag: "manage_channels",
+    label: "Gestionar canales",
+    description: "Crear, editar y archivar los canales del equipo.",
   },
   {
-    value: "publisher",
-    label: "Publicador",
-    description: "Programa y publica en YouTube.",
-    chip: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+    flag: "manage_pipelines",
+    label: "Gestionar pipelines",
+    description: "Crear flujos y editar sus etapas.",
   },
   {
-    value: "viewer",
-    label: "Observador",
-    description: "Solo lectura. No puede editar ni comentar.",
-    chip: "bg-slate-100 text-slate-600 ring-slate-200",
+    flag: "manage_members",
+    label: "Gestionar el equipo",
+    description: "Invitar, cambiar roles y dar de baja a miembros.",
+  },
+  {
+    flag: "manage_workspace",
+    label: "Configurar el equipo",
+    description: "Cambiar el nombre del equipo y administrar los roles.",
   },
 ];
 
-const ROLE_MAP = new Map(ROLES.map((role) => [role.value, role]));
+/** Resumen corto de lo que puede un rol, para listarlo en la interfaz. */
+export function roleSummary(role: Role): string {
+  if (role.key === "owner") return "Control total del equipo";
+  if (role.key === "admin") return "Administra todo salvo eliminar el equipo";
 
-export function roleMeta(role: WorkspaceRole): RoleMeta {
-  return ROLE_MAP.get(role) ?? ROLES[ROLES.length - 1];
+  const granted = PERMISSION_FIELDS.filter((field) => role[field.flag]);
+  if (granted.length === 0) return "Solo lectura";
+  return granted.map((field) => field.label).join(" · ");
 }
-
-/** Roles asignables desde la pantalla de equipo (owner se transfiere aparte). */
-export const ASSIGNABLE_ROLES = ROLES.filter((role) => role.value !== "owner");

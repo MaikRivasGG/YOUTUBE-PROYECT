@@ -5,11 +5,10 @@ import { useRouter } from "next/navigation";
 
 import { Avatar } from "@/components/ui/avatar";
 import { Menu, MenuItem, MenuSeparator } from "@/components/ui/menu";
-import { roleMeta } from "@/lib/domain/roles";
 import { signOutAction } from "@/server/actions/auth";
-import type { Profile, WorkspaceRole } from "@/types/database";
+import type { Profile, Role } from "@/types/database";
 
-export function UserMenu({ profile, role }: { profile: Profile; role: WorkspaceRole | null }) {
+export function UserMenu({ profile, roles }: { profile: Profile; roles: Role[] }) {
   const router = useRouter();
 
   return (
@@ -28,7 +27,7 @@ export function UserMenu({ profile, role }: { profile: Profile; role: WorkspaceR
               {profile.full_name}
             </span>
             <span className="text-sidebar-text block truncate text-[11px]">
-              {role ? roleMeta(role).label : "Sin equipo"}
+              {roles.length > 0 ? roles.map((item) => item.name).join(" · ") : "Sin rol"}
             </span>
           </span>
           <MoreHorizontal className="text-sidebar-text size-4" aria-hidden />

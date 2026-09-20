@@ -1,5 +1,5 @@
 import type { AnalyticsVideo } from "@/server/queries";
-import type { VideoStatus } from "@/types/database";
+import type { Stage, StageKind } from "@/types/database";
 
 export interface MonthlyPoint {
   key: string;
@@ -7,7 +7,12 @@ export interface MonthlyPoint {
   published: number;
 }
 
-/** Publicaciones por mes en los últimos `months` meses, incluido el actual. */
+/** Indice etapa -> tipo, para saber que cuenta como cerrado o publicado. */
+export function stageKindMap(stages: Stage[]): Map<string, StageKind> {
+  return new Map(stages.map((stage) => [stage.id, stage.kind]));
+}
+
+/** Publicaciones por mes en los ultimos `months` meses, incluido el actual. */
 export function publicationsByMonth(
   videos: AnalyticsVideo[],
   months = 6,
@@ -39,8 +44,8 @@ export function publicationsByMonth(
 }
 
 /**
- * Tiempo medio de ciclo en días: de la creación de la tarjeta a su publicación.
- * Devuelve null si todavía no hay ningun video publicado.
+ * Tiempo medio de ciclo en dias: de la creacion de la tarjeta a su publicacion.
+ * Devuelve null si todavia no hay ningun video publicado.
  */
 export function averageCycleDays(videos: AnalyticsVideo[]): number | null {
   const durations = videos
@@ -57,13 +62,18 @@ export function averageCycleDays(videos: AnalyticsVideo[]): number | null {
   return Math.round((total / durations.length) * 10) / 10;
 }
 
+const CLOSED: StageKind[] = ["done", "archived"];
+
 /** Cuantas tarjetas vivas tiene cada persona asignada. */
-export function workloadByMember(videos: AnalyticsVideo[]): Map<string, number> {
+export function workloadByMember(
+  videos: AnalyticsVideo[],
+  kinds: Map<string, StageKind>,
+): Map<string, number> {
   const load = new Map<string, number>();
-  const closed: VideoStatus[] = ["published", "archived"];
 
   for (const video of videos) {
-    if (closed.includes(video.status)) continue;
+    const kind = kinds.get(video.stage_id);
+    if (kind && CLOSED.includes(kind)) continue;
     for (const assignee of video.video_assignees) {
       load.set(assignee.user_id, (load.get(assignee.user_id) ?? 0) + 1);
     }
@@ -75,14 +85,18 @@ export function workloadByMember(videos: AnalyticsVideo[]): Map<string, number> 
 /** Reparto de videos por canal, separando los vivos de los publicados. */
 export function byChannel(
   videos: AnalyticsVideo[],
+  kinds: Map<string, StageKind>,
 ): Map<string, { active: number; published: number }> {
   const result = new Map<string, { active: number; published: number }>();
 
   for (const video of videos) {
     const key = video.channel_id ?? "sin-canal";
+    const kind = kinds.get(video.stage_id);
     const entry = result.get(key) ?? { active: 0, published: 0 };
-    if (video.status === "published") entry.published += 1;
-    else if (video.status !== "archived") entry.active += 1;
+
+    if (kind === "done") entry.published += 1;
+    else if (kind !== "archived") entry.active += 1;
+
     result.set(key, entry);
   }
 

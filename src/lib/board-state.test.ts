@@ -11,18 +11,18 @@ import {
   progressOf,
 } from "@/lib/board-state";
 import type { BoardVideo } from "@/server/queries";
-import type { VideoStatus } from "@/types/database";
 
 function video(overrides: Partial<BoardVideo> & { id: string }): BoardVideo {
   return {
     workspace_id: "ws",
+    pipeline_id: "pipe",
+    stage_id: "idea",
     channel_id: null,
     ref: "VID-0001",
     title: "Título",
     hook: null,
     description: null,
     script_body: null,
-    status: "idea" as VideoStatus,
     priority: "normal",
     position: 1000,
     tags: [],
@@ -50,9 +50,9 @@ function isoDaysFromNow(days: number): string {
 describe("groupByStage", () => {
   it("agrupa y ordena por posicion", () => {
     const groups = groupByStage([
-      video({ id: "b", status: "script", position: 2000 }),
-      video({ id: "a", status: "script", position: 1000 }),
-      video({ id: "c", status: "idea" }),
+      video({ id: "b", stage_id: "script", position: 2000 }),
+      video({ id: "a", stage_id: "script", position: 1000 }),
+      video({ id: "c", stage_id: "idea" }),
     ]);
 
     expect(groups.get("script")?.map((item) => item.id)).toEqual(["a", "b"]);
@@ -62,15 +62,15 @@ describe("groupByStage", () => {
 
 describe("computeMove", () => {
   const videos = [
-    video({ id: "a", status: "idea", position: 1000 }),
-    video({ id: "b", status: "script", position: 1000 }),
-    video({ id: "c", status: "script", position: 2000 }),
+    video({ id: "a", stage_id: "idea", position: 1000 }),
+    video({ id: "b", stage_id: "script", position: 1000 }),
+    video({ id: "c", stage_id: "script", position: 2000 }),
   ];
 
   it("mueve a otra columna calculando el punto medio", () => {
     const result = computeMove(videos, "a", "script", 1);
     expect(result?.position).toBe(1500);
-    expect(result?.videos.find((item) => item.id === "a")?.status).toBe("script");
+    expect(result?.videos.find((item) => item.id === "a")?.stage_id).toBe("script");
   });
 
   it("mueve al final de la columna destino", () => {

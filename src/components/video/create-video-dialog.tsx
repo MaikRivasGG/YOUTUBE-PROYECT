@@ -9,26 +9,33 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { createVideo, nextPositionFor } from "@/lib/api/board";
-import { PIPELINE, PRIORITIES } from "@/lib/domain/pipeline";
+import { PRIORITIES } from "@/lib/domain/pipeline";
 import { createVideoSchema } from "@/lib/domain/validators";
 import { errorMessage } from "@/lib/utils";
-import type { VideoStatus } from "@/types/database";
 
 export function CreateVideoDialog({
   open,
   onOpenChange,
-  defaultStatus = "idea",
+  defaultPipelineId,
+  defaultStageId,
   onCreated,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  defaultStatus?: VideoStatus;
+  defaultPipelineId?: string;
+  defaultStageId?: string;
   onCreated?: (id: string) => void;
 }) {
-  const { workspaceId, channels } = useWorkspace();
+  const { workspaceId, channels, pipelines, defaultPipeline, stagesOf } = useWorkspace();
   const router = useRouter();
+
+  const [pipelineId, setPipelineId] = React.useState(
+    () => defaultPipelineId ?? defaultPipeline?.id ?? pipelines[0]?.id ?? "",
+  );
   const [pending, setPending] = React.useState(false);
   const [errors, setErrors] = React.useState<Record<string, string>>({});
+
+  const stages = stagesOf(pipelineId);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -37,7 +44,8 @@ export function CreateVideoDialog({
     const parsed = createVideoSchema.safeParse({
       title: form.get("title"),
       channel_id: form.get("channel_id") || null,
-      status: form.get("status"),
+      pipeline_id: pipelineId,
+      stage_id: form.get("stage_id"),
       priority: form.get("priority"),
       hook: form.get("hook"),
       due_date: form.get("due_date") || null,
@@ -45,9 +53,7 @@ export function CreateVideoDialog({
 
     if (!parsed.success) {
       const map: Record<string, string> = {};
-      for (const issue of parsed.error.issues) {
-        map[issue.path.join(".")] = issue.message;
-      }
+      for (const issue of parsed.error.issues) map[issue.path.join(".")] = issue.message;
       setErrors(map);
       return;
     }
@@ -56,11 +62,12 @@ export function CreateVideoDialog({
     setPending(true);
 
     try {
-      const position = await nextPositionFor(workspaceId, parsed.data.status);
+      const position = await nextPositionFor(workspaceId, parsed.data.stage_id);
       const video = await createVideo({
         workspace_id: workspaceId,
+        pipeline_id: parsed.data.pipeline_id,
+        stage_id: parsed.data.stage_id,
         title: parsed.data.title,
-        status: parsed.data.status,
         position,
         channel_id: parsed.data.channel_id ?? null,
         priority: parsed.data.priority,
@@ -79,6 +86,12 @@ export function CreateVideoDialog({
     }
   }
 
+  /** Al elegir canal se adopta su pipeline, que es el que le corresponde. */
+  function handleChannelChange(channelId: string) {
+    const channel = channels.find((item) => item.id === channelId);
+    if (channel?.pipeline_id) setPipelineId(channel.pipeline_id);
+  }
+
   return (
     <Dialog
       open={open}
@@ -87,11 +100,11 @@ export function CreateVideoDialog({
       description="Entra directo al pipeline, en la etapa que elijas."
     >
       <form id="create-video" onSubmit={handleSubmit} className="space-y-4" noValidate>
-        <Field label="Título de trabajo" htmlFor="title" error={errors.title}>
+        <Field label="Titulo de trabajo" htmlFor="title" error={errors.title}>
           <Input
             id="title"
             name="title"
-            placeholder="Por qué fallan las baterías"
+            placeholder="Por que fallan las baterias"
             required
             maxLength={160}
           />
@@ -103,13 +116,18 @@ export function CreateVideoDialog({
             name="hook"
             rows={2}
             className="min-h-16"
-            placeholder="El 80% de las baterías mueren por una sola razón"
+            placeholder="El 80% de las baterias mueren por una sola razon"
           />
         </Field>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Canal" htmlFor="channel_id">
-            <Select id="channel_id" name="channel_id" defaultValue="">
+            <Select
+              id="channel_id"
+              name="channel_id"
+              defaultValue=""
+              onChange={(event) => handleChannelChange(event.target.value)}
+            >
               <option value="">Sin canal</option>
               {channels.map((channel) => (
                 <option key={channel.id} value={channel.id}>
@@ -119,11 +137,30 @@ export function CreateVideoDialog({
             </Select>
           </Field>
 
-          <Field label="Etapa" htmlFor="status">
-            <Select id="status" name="status" defaultValue={defaultStatus}>
-              {PIPELINE.map((stage) => (
+          <Field label="Pipeline" htmlFor="pipeline_id">
+            <Select
+              id="pipeline_id"
+              value={pipelineId}
+              onChange={(event) => setPipelineId(event.target.value)}
+            >
+              {pipelines.map((pipeline) => (
+                <option key={pipeline.id} value={pipeline.id}>
+                  {pipeline.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field label="Etapa" htmlFor="stage_id" error={errors.stage_id}>
+            <Select
+              id="stage_id"
+              name="stage_id"
+              key={pipelineId}
+              defaultValue={defaultStageId ?? stages[0]?.id}
+            >
+              {stages.map((stage) => (
                 <option key={stage.id} value={stage.id}>
-                  {stage.label}
+                  {stage.name}
                 </option>
               ))}
             </Select>

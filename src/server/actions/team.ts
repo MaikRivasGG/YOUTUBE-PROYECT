@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { changeRoleSchema, inviteSchema } from "@/lib/domain/validators";
+import { inviteSchema, memberRolesSchema } from "@/lib/domain/validators";
 import { siteUrl } from "@/lib/env";
 import { requireSession, requireWorkspace } from "@/lib/session";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -12,13 +12,13 @@ import { fail, ok, zodFieldErrors, type ActionResult } from "@/server/action-res
 type State = ActionResult<{ inviteUrl: string }> | ActionResult<undefined> | null;
 
 /**
- * Crea la invitación y devuelve el enlace listo para compartir.
+ * Crea la invitacion y devuelve el enlace listo para compartir.
  * No requiere service role: el destinatario se registra y acepta con el token.
  */
 export async function inviteMemberAction(_prev: State, formData: FormData): Promise<State> {
   const parsed = inviteSchema.safeParse({
     email: formData.get("email"),
-    role: formData.get("role"),
+    role_id: formData.get("role_id"),
   });
   if (!parsed.success) return fail("Revisa los datos", zodFieldErrors(parsed.error));
 
@@ -37,7 +37,7 @@ export async function inviteMemberAction(_prev: State, formData: FormData): Prom
 
   if (alreadyMember) return fail("Esa persona ya esta en el equipo");
 
-  // Una invitación nueva sustituye a la anterior para ese email.
+  // Una invitacion nueva sustituye a la anterior para ese email.
   await supabase
     .from("invitations")
     .update({ status: "revoked" })
@@ -50,13 +50,13 @@ export async function inviteMemberAction(_prev: State, formData: FormData): Prom
     .insert({
       workspace_id: workspace.id,
       email: parsed.data.email,
-      role: parsed.data.role,
+      role_id: parsed.data.role_id,
       invited_by: userId,
     })
     .select("token")
     .single();
 
-  if (error) return fail(errorMessage(error, "No hemos podido crear la invitación"));
+  if (error) return fail(errorMessage(error, "No hemos podido crear la invitacion"));
 
   revalidatePath("/equipo");
   return ok({ inviteUrl: `${siteUrl()}/invitacion/${data.token}` });
@@ -71,24 +71,64 @@ export async function revokeInvitationAction(id: string): Promise<ActionResult<u
   return ok(undefined);
 }
 
-export async function changeMemberRoleAction(
+/**
+ * Sustituye los roles de un miembro por la lista recibida.
+ *
+ * Se resuelve como diferencia (altas y bajas) en vez de borrar y reinsertar,
+ * para que el trigger que protege al ultimo propietario siga teniendo sentido.
+ */
+export async function setMemberRolesAction(
   userId: string,
-  role: string,
+  roleIds: string[],
 ): Promise<ActionResult<undefined>> {
-  const parsed = changeRoleSchema.safeParse({ user_id: userId, role });
-  if (!parsed.success) return fail("Rol no valido");
+  const parsed = memberRolesSchema.safeParse({ user_id: userId, role_ids: roleIds });
+  if (!parsed.success) return fail("Roles no validos");
 
   const { workspace } = await requireWorkspace();
   const supabase = await supabaseServer();
 
-  const { error } = await supabase
-    .from("workspace_members")
-    .update({ role: parsed.data.role })
+  const { data: current } = await supabase
+    .from("member_roles")
+    .select("role_id")
     .eq("workspace_id", workspace.id)
     .eq("user_id", parsed.data.user_id);
 
-  if (error) return fail(errorMessage(error, "No tienes permiso para cambiar ese rol"));
+  const currentIds = new Set((current ?? []).map((row) => row.role_id));
+  const nextIds = new Set(parsed.data.role_ids);
+
+  const toAdd = [...nextIds].filter((id) => !currentIds.has(id));
+  const toRemove = [...currentIds].filter((id) => !nextIds.has(id));
+
+  if (toAdd.length > 0) {
+    const { error } = await supabase.from("member_roles").insert(
+      toAdd.map((roleId) => ({
+        workspace_id: workspace.id,
+        user_id: parsed.data.user_id,
+        role_id: roleId,
+      })),
+    );
+    if (error) return fail(errorMessage(error, "No tienes permiso para asignar ese rol"));
+  }
+
+  for (const roleId of toRemove) {
+    const { error } = await supabase
+      .from("member_roles")
+      .delete()
+      .eq("workspace_id", workspace.id)
+      .eq("user_id", parsed.data.user_id)
+      .eq("role_id", roleId);
+
+    if (error) {
+      return fail(
+        error.message.includes("LAST_OWNER")
+          ? "El equipo no puede quedarse sin propietario"
+          : errorMessage(error),
+      );
+    }
+  }
+
   revalidatePath("/equipo");
+  revalidatePath("/", "layout");
   return ok(undefined);
 }
 
@@ -102,7 +142,14 @@ export async function removeMemberAction(userId: string): Promise<ActionResult<u
     .eq("workspace_id", workspace.id)
     .eq("user_id", userId);
 
-  if (error) return fail(errorMessage(error, "No tienes permiso para quitar a esa persona"));
+  if (error) {
+    return fail(
+      error.message.includes("LAST_OWNER")
+        ? "El equipo no puede quedarse sin propietario"
+        : errorMessage(error, "No tienes permiso para quitar a esa persona"),
+    );
+  }
+
   revalidatePath("/equipo");
   return ok(undefined);
 }
@@ -112,7 +159,7 @@ export async function acceptInvitationAction(token: string): Promise<ActionResul
   const supabase = await supabaseServer();
 
   const { error } = await supabase.rpc("accept_invitation", { p_token: token });
-  if (error) return fail(errorMessage(error, "No hemos podido aceptar la invitación"));
+  if (error) return fail(errorMessage(error, "No hemos podido aceptar la invitacion"));
 
   revalidatePath("/", "layout");
   return ok(undefined);

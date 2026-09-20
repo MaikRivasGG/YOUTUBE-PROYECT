@@ -8,12 +8,10 @@ import { toast } from "sonner";
 import { Menu, MenuItem, MenuLabel, MenuSeparator } from "@/components/ui/menu";
 import { cn, initials } from "@/lib/utils";
 import { switchWorkspaceAction } from "@/server/actions/workspace";
-import type { WorkspaceRole } from "@/types/database";
 
 export interface SwitcherWorkspace {
   id: string;
   name: string;
-  role: WorkspaceRole;
 }
 
 export function WorkspaceSwitcher({

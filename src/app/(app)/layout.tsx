@@ -1,15 +1,15 @@
 import { Sidebar } from "@/components/layout/sidebar";
 import { WorkspaceProvider } from "@/components/providers/workspace-provider";
 import { requireWorkspace } from "@/lib/session";
-import { getChannels, getTeamMembers, getWorkspaceStats } from "@/server/queries";
+import { getChannels, getWorkspaceConfig, getWorkspaceStats } from "@/server/queries";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await requireWorkspace();
   const workspaceId = session.workspace.id;
 
-  const [channels, members, stats] = await Promise.all([
+  const [channels, config, stats] = await Promise.all([
     getChannels(workspaceId),
-    getTeamMembers(workspaceId),
+    getWorkspaceConfig(workspaceId, session.userId),
     getWorkspaceStats(workspaceId),
   ]);
 
@@ -18,15 +18,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       value={{
         workspaceId,
         workspaceName: session.workspace.name,
-        role: session.role,
         userId: session.userId,
         profile: session.profile,
         channels,
-        members: members.map((member) => ({
-          user_id: member.user_id,
-          role: member.role,
-          profile: member.profile,
-        })),
+        ...config,
       }}
     >
       <div className="flex min-h-dvh flex-col lg:h-dvh lg:flex-row lg:overflow-hidden">
@@ -34,13 +29,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           workspaces={session.workspaces.map((workspace) => ({
             id: workspace.id,
             name: workspace.name,
-            role: workspace.role,
           }))}
           activeWorkspaceId={workspaceId}
-          summary={`${stats.members} miembros - ${stats.channels} canales`}
+          summary={`${stats.members} miembros · ${stats.channels} canales`}
           channels={channels}
           profile={session.profile}
-          role={session.role}
+          myRoles={config.myRoles}
           productionCount={stats.in_progress}
         />
 

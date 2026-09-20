@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { createWorkspaceSchema } from "@/lib/domain/validators";
+import { createWorkspaceSchema, deleteWorkspaceSchema } from "@/lib/domain/validators";
 import { WORKSPACE_COOKIE, requireSession } from "@/lib/session";
 import { supabaseServer } from "@/lib/supabase/server";
 import { errorMessage, slugify } from "@/lib/utils";
@@ -81,4 +81,30 @@ export async function renameWorkspaceAction(_prev: State, formData: FormData): P
   if (error) return fail(errorMessage(error));
   revalidatePath("/", "layout");
   return ok(undefined);
+}
+
+/**
+ * Elimina el equipo entero. Solo el propietario, y solo si escribe el nombre
+ * exacto: el borrado arrastra canales, videos, comentarios e historial.
+ */
+export async function deleteWorkspaceAction(_prev: State, formData: FormData): Promise<State> {
+  const parsed = deleteWorkspaceSchema.safeParse({ confirmation: formData.get("confirmation") });
+  if (!parsed.success) return fail("Escribe el nombre del equipo para confirmar");
+
+  const session = await requireSession();
+  if (!session.workspace) return fail("No hay equipo activo");
+
+  if (parsed.data.confirmation.trim() !== session.workspace.name) {
+    return fail("El nombre no coincide con el del equipo");
+  }
+
+  const supabase = await supabaseServer();
+  const { error } = await supabase.from("workspaces").delete().eq("id", session.workspace.id);
+
+  if (error) return fail(errorMessage(error, "Solo el propietario puede eliminar el equipo"));
+
+  const cookieStore = await cookies();
+  cookieStore.delete(WORKSPACE_COOKIE);
+  revalidatePath("/", "layout");
+  redirect("/bienvenida");
 }

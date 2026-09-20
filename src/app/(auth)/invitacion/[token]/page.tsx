@@ -5,7 +5,6 @@ import { UserPlus } from "lucide-react";
 
 import { AcceptInvitation } from "@/components/team/accept-invitation";
 import { AuthHeader } from "@/components/auth/form-shell";
-import { roleMeta } from "@/lib/domain/roles";
 import { getSessionContext } from "@/lib/session";
 import { supabaseServer } from "@/lib/supabase/server";
 
@@ -48,8 +47,7 @@ export default async function InvitationPage({ params }: { params: Promise<{ tok
         title={`Unete a ${invitation.workspace_name}`}
         subtitle={
           <>
-            Te han invitado como{" "}
-            <strong className="text-ink-700">{roleMeta(invitation.role).label}</strong>.
+            Te han invitado como <strong className="text-ink-700">{invitation.role_name}</strong>.
           </>
         }
       />

@@ -24,17 +24,18 @@ import {
   updateVideo,
 } from "@/lib/api/board";
 import { toDateInput } from "@/lib/dates";
-import { PIPELINE, PRIORITIES, priorityMeta, stageMeta } from "@/lib/domain/pipeline";
+import { PRIORITIES, priorityMeta } from "@/lib/domain/pipeline";
 import { canMoveVideo } from "@/lib/domain/roles";
 import { cn, errorMessage, isSafeHttpUrl } from "@/lib/utils";
 import type { VideoDetail as VideoDetailData } from "@/server/queries";
-import type { Video, VideoStatus } from "@/types/database";
+import type { Video } from "@/types/database";
 
 /** Campos que se renderizan como enlace o imagen y exigen http(s). */
 const URL_FIELDS = new Set<keyof Video>(["youtube_url", "thumbnail_url"]);
 
 export function VideoDetailView({ video: initial }: { video: VideoDetailData }) {
-  const { channels, members, can, role, userId, memberById } = useWorkspace();
+  const workspace = useWorkspace();
+  const { channels, members, can, myRoles, managedStages, userId, memberById } = workspace;
   const router = useRouter();
 
   const [video, setVideo] = React.useState(initial);
@@ -44,7 +45,8 @@ export function VideoDetailView({ video: initial }: { video: VideoDetailData }) 
   const [savingField, setSavingField] = React.useState<string | null>(null);
 
   const editable = can("video.edit");
-  const stage = stageMeta(video.status);
+  const stage = workspace.stageById(video.stage_id);
+  const stages = workspace.stagesOf(video.pipeline_id);
   const channel = channels.find((item) => item.id === video.channel_id);
 
   /** Guarda un campo suelto y revierte si el servidor lo rechaza. */
@@ -74,13 +76,14 @@ export function VideoDetailView({ video: initial }: { video: VideoDetailData }) 
     [video],
   );
 
-  async function changeStatus(status: VideoStatus) {
+  async function changeStage(stageId: string) {
     const allowed = canMoveVideo({
-      role,
+      roles: myRoles,
+      managedStageIds: managedStages,
       userId,
       assigneeIds: assignees,
-      from: video.status,
-      to: status,
+      fromStageId: video.stage_id,
+      toStageId: stageId,
     });
 
     if (!allowed) {
@@ -88,15 +91,15 @@ export function VideoDetailView({ video: initial }: { video: VideoDetailData }) 
       return;
     }
 
-    const previous = video.status;
-    setVideo((current) => ({ ...current, status }));
+    const previous = video.stage_id;
+    setVideo((current) => ({ ...current, stage_id: stageId }));
 
     try {
-      const position = await nextPositionFor(video.workspace_id, status);
-      await moveVideo(video.id, status, position);
-      toast.success(`Movido a ${stageMeta(status).label}`);
+      const position = await nextPositionFor(video.workspace_id, stageId);
+      await moveVideo(video.id, stageId, position);
+      toast.success(`Movido a ${workspace.stageById(stageId)?.name ?? "otra etapa"}`);
     } catch (error) {
-      setVideo((current) => ({ ...current, status: previous }));
+      setVideo((current) => ({ ...current, stage_id: previous }));
       toast.error(errorMessage(error));
     }
   }
@@ -161,8 +164,13 @@ export function VideoDetailView({ video: initial }: { video: VideoDetailData }) 
                     <MenuItem
                       onClick={async () => {
                         close();
+                        const archived = workspace.archivedStageOf(video.pipeline_id);
+                        if (!archived) {
+                          toast.error("Este pipeline no tiene etapa de archivado");
+                          return;
+                        }
                         try {
-                          await archiveVideo(video.id);
+                          await archiveVideo(video.id, archived.id);
                           toast.success("Video archivado");
                           router.push("/produccion");
                         } catch (error) {
@@ -211,9 +219,11 @@ export function VideoDetailView({ video: initial }: { video: VideoDetailData }) 
               />
 
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Badge className="bg-column text-ink-700" dot={stage.dot}>
-                  {stage.label}
-                </Badge>
+                {stage ? (
+                  <Badge className="bg-column text-ink-700" dotColor={stage.color}>
+                    {stage.name}
+                  </Badge>
+                ) : null}
                 <Badge className={priorityMeta(video.priority).chip}>
                   {priorityMeta(video.priority).label}
                 </Badge>
@@ -273,13 +283,13 @@ export function VideoDetailView({ video: initial }: { video: VideoDetailData }) 
             <Card className="space-y-4 p-4">
               <Field label="Etapa">
                 <Select
-                  value={video.status}
+                  value={video.stage_id}
                   disabled={!editable}
-                  onChange={(event) => changeStatus(event.target.value as VideoStatus)}
+                  onChange={(event) => changeStage(event.target.value)}
                 >
-                  {PIPELINE.map((item) => (
+                  {stages.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {item.label}
+                      {item.name}
                     </option>
                   ))}
                 </Select>

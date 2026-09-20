@@ -9,6 +9,7 @@ import { useWorkspace } from "@/components/providers/workspace-provider";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Field, Input, Select } from "@/components/ui/field";
+import { ImageUpload } from "@/components/ui/image-upload";
 import { Card, EmptyState, Progress } from "@/components/ui/misc";
 import {
   createChannelAction,
@@ -81,10 +82,15 @@ export function ChannelsPanel({
               <Card key={channel.id} className="p-4">
                 <div className="flex items-start gap-3">
                   <span
-                    className="grid size-10 shrink-0 place-items-center rounded-xl text-[13px] font-bold text-white"
-                    style={{ backgroundColor: channel.color }}
+                    className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl text-[13px] font-bold text-white"
+                    style={{ backgroundColor: channel.image_url ? undefined : channel.color }}
                   >
-                    {channel.name.slice(0, 2).toUpperCase()}
+                    {channel.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- imagen subida por el equipo
+                      <img src={channel.image_url} alt="" className="size-full object-cover" />
+                    ) : (
+                      channel.name.slice(0, 2).toUpperCase()
+                    )}
                   </span>
 
                   <div className="min-w-0 flex-1">
@@ -189,9 +195,11 @@ function ChannelDialog({
   onOpenChange: (open: boolean) => void;
   channel?: Channel | null;
 }) {
+  const { workspaceId, pipelines, defaultPipeline } = useWorkspace();
   const action = channel ? updateChannelAction : createChannelAction;
   const [state, formAction, pending] = useActionState(action, null);
   const [color, setColor] = React.useState(channel?.color ?? PALETTE[0]);
+  const [imageUrl, setImageUrl] = React.useState<string | null>(channel?.image_url ?? null);
 
   React.useEffect(() => {
     if (state?.ok) onOpenChange(false);
@@ -209,6 +217,20 @@ function ChannelDialog({
       <form action={formAction} className="space-y-4" noValidate>
         {channel ? <input type="hidden" name="id" value={channel.id} /> : null}
         <input type="hidden" name="color" value={color} />
+        <input type="hidden" name="image_url" value={imageUrl ?? ""} />
+
+        <Field label="Miniatura del canal" hint="Se ve en cada tarjeta del tablero.">
+          <ImageUpload
+            bucket="channels"
+            folder={workspaceId}
+            value={imageUrl}
+            onChange={setImageUrl}
+            label="Subir miniatura"
+            fallback={channel?.name ?? "Canal"}
+            color={color}
+            rounded="xl"
+          />
+        </Field>
 
         {state && !state.ok ? (
           <p className="rounded-lg bg-red-50 px-3 py-2 text-[13px] text-red-700" role="alert">
@@ -253,6 +275,24 @@ function ChannelDialog({
             defaultValue={channel?.youtube_url ?? ""}
             placeholder="https://youtube.com/@pulsotech"
           />
+        </Field>
+
+        <Field
+          label="Pipeline"
+          htmlFor="channel-pipeline"
+          hint="El flujo que siguen los videos de este canal."
+        >
+          <Select
+            id="channel-pipeline"
+            name="pipeline_id"
+            defaultValue={channel?.pipeline_id ?? defaultPipeline?.id ?? ""}
+          >
+            {pipelines.map((pipeline) => (
+              <option key={pipeline.id} value={pipeline.id}>
+                {pipeline.name}
+              </option>
+            ))}
+          </Select>
         </Field>
 
         <Field label="Videos por semana (objetivo)" htmlFor="channel-target">

@@ -13,8 +13,41 @@ import { Progress } from "@/components/ui/misc";
 import { progressOf } from "@/lib/board-state";
 import { dueLabel, isOverdue } from "@/lib/dates";
 import { priorityMeta } from "@/lib/domain/pipeline";
-import { cn } from "@/lib/utils";
+import { cn, initials } from "@/lib/utils";
 import type { BoardVideo } from "@/server/queries";
+
+/** Miniatura del canal: su imagen si la tiene, o sus iniciales sobre su color. */
+function ChannelMark({
+  name,
+  color,
+  imageUrl,
+}: {
+  name: string;
+  color: string;
+  imageUrl: string | null;
+}) {
+  if (imageUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- imagenes subidas por el equipo
+      <img
+        src={imageUrl}
+        alt=""
+        className="size-4 shrink-0 rounded-[5px] object-cover"
+        loading="lazy"
+      />
+    );
+  }
+
+  return (
+    <span
+      aria-hidden
+      className="grid size-4 shrink-0 place-items-center rounded-[5px] text-[8px] font-bold text-white"
+      style={{ backgroundColor: color }}
+    >
+      {initials(name)}
+    </span>
+  );
+}
 
 export function VideoCard({
   video,
@@ -25,8 +58,9 @@ export function VideoCard({
   dragging?: boolean;
   draggable?: boolean;
 }) {
-  const { channelById, memberById } = useWorkspace();
+  const { channelById, memberById, stageById } = useWorkspace();
   const channel = channelById(video.channel_id);
+  const stage = stageById(video.stage_id);
   const priority = priorityMeta(video.priority);
   const progress = progressOf(video);
   const due = dueLabel(video.due_date);
@@ -36,12 +70,12 @@ export function VideoCard({
     .map((assignee) => memberById(assignee.user_id))
     .filter((profile): profile is NonNullable<typeof profile> => Boolean(profile));
 
-  const readyToPublish = video.status === "scheduled" || video.status === "published";
+  const ready = stage?.kind === "scheduled" || stage?.kind === "done";
 
   return (
     <article
       className={cn(
-        "bg-surface card-shadow group ring-line rounded-xl ring-1 transition",
+        "bg-surface card-shadow ring-line group rounded-xl ring-1 transition",
         draggable ? "cursor-grab active:cursor-grabbing" : "",
         dragging ? "rotate-1 opacity-90 shadow-lg" : "hover:ring-ink-400/40",
       )}
@@ -59,7 +93,11 @@ export function VideoCard({
       <div className="space-y-2 p-3">
         <div className="flex items-center justify-between gap-2">
           <span className="flex min-w-0 items-center gap-1.5">
-            {channel ? <Dot color={channel.color} /> : null}
+            {channel ? (
+              <ChannelMark name={channel.name} color={channel.color} imageUrl={channel.image_url} />
+            ) : (
+              <Dot color="#cbd5e1" />
+            )}
             <span
               className="truncate text-[11px] font-medium"
               style={{ color: channel?.color ?? "var(--color-ink-400)" }}
@@ -68,7 +106,7 @@ export function VideoCard({
             </span>
           </span>
 
-          {readyToPublish ? (
+          {ready ? (
             <Badge className="bg-emerald-50 text-emerald-700">Listo</Badge>
           ) : (
             <Badge className={priority.chip}>{priority.label}</Badge>
@@ -132,7 +170,7 @@ export function VideoCard({
 export function SortableVideoCard({ video, disabled }: { video: BoardVideo; disabled?: boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: video.id,
-    data: { type: "card", status: video.status },
+    data: { type: "card", stageId: video.stage_id },
     disabled,
   });
 

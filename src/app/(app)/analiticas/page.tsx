@@ -11,41 +11,48 @@ import {
   byChannel,
   onTimeRate,
   publicationsByMonth,
+  stageKindMap,
   workloadByMember,
 } from "@/lib/analytics";
 import { requireWorkspace } from "@/lib/session";
 import {
   getAnalyticsVideos,
   getChannels,
-  getTeamMembers,
+  getWorkspaceConfig,
   getWorkspaceStats,
+  getNotifications,
 } from "@/server/queries";
 
 export const metadata: Metadata = { title: "Analíticas" };
 
 export default async function AnalyticsPage() {
-  const { workspace } = await requireWorkspace();
+  const { workspace, userId } = await requireWorkspace();
 
-  const [videos, channels, members, stats] = await Promise.all([
+  const [videos, channels, config, stats, notifications] = await Promise.all([
     getAnalyticsVideos(workspace.id),
     getChannels(workspace.id, true),
-    getTeamMembers(workspace.id),
+    getWorkspaceConfig(workspace.id, userId),
     getWorkspaceStats(workspace.id),
+    getNotifications(workspace.id),
   ]);
+
+  const members = config.members;
+  const kinds = stageKindMap(config.stages);
 
   const monthly = publicationsByMonth(videos);
   const maxMonthly = Math.max(1, ...monthly.map((point) => point.published));
   const cycle = averageCycleDays(videos);
   const onTime = onTimeRate(videos);
-  const workload = workloadByMember(videos);
-  const perChannel = byChannel(videos);
+  const workload = workloadByMember(videos, kinds);
+  const perChannel = byChannel(videos, kinds);
   const maxLoad = Math.max(1, ...workload.values());
 
-  const totalPublished = videos.filter((video) => video.status === "published").length;
+  const totalPublished = videos.filter((video) => video.published_at !== null).length;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
+        notifications={notifications}
         title="Analíticas"
         subtitle="Ritmo de producción, cumplimiento y carga del equipo"
       />

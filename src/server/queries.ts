@@ -5,9 +5,13 @@ import type {
   Activity,
   Channel,
   Invitation,
+  Notification,
+  Pipeline,
   Profile,
+  Role,
+  RoleStage,
+  Stage,
   Video,
-  WorkspaceRole,
   WorkspaceStats,
 } from "@/types/database";
 
@@ -19,12 +23,93 @@ export interface BoardVideo extends Video {
 
 export interface TeamMember {
   user_id: string;
-  role: WorkspaceRole;
   created_at: string;
   profile: Profile;
+  roles: Role[];
+}
+
+/** Todo lo que define como funciona un equipo: flujos, etapas y roles. */
+export interface WorkspaceConfig {
+  pipelines: Pipeline[];
+  stages: Stage[];
+  roles: Role[];
+  roleStages: RoleStage[];
+  members: TeamMember[];
+  myRoles: Role[];
+  /** Etapas que gestionan los roles del usuario actual. */
+  managedStageIds: string[];
 }
 
 const BOARD_SELECT = "*, video_assignees(user_id), checklist_items(id, is_done)";
+
+export async function getWorkspaceConfig(
+  workspaceId: string,
+  userId: string,
+): Promise<WorkspaceConfig> {
+  const supabase = await supabaseServer();
+
+  const [pipelines, stages, roles, roleStages, members, memberRoles] = await Promise.all([
+    supabase.from("pipelines").select("*").eq("workspace_id", workspaceId).order("position"),
+    supabase
+      .from("stages")
+      .select("*, pipelines!inner(workspace_id)")
+      .eq("pipelines.workspace_id", workspaceId)
+      .order("position"),
+    supabase.from("roles").select("*").eq("workspace_id", workspaceId).order("position"),
+    supabase
+      .from("role_stages")
+      .select("*, roles!inner(workspace_id)")
+      .eq("roles.workspace_id", workspaceId),
+    supabase
+      .from("workspace_members")
+      .select("user_id, created_at, profiles(*)")
+      .eq("workspace_id", workspaceId),
+    supabase.from("member_roles").select("user_id, role_id").eq("workspace_id", workspaceId),
+  ]);
+
+  const roleList = (roles.data ?? []) as Role[];
+  const roleById = new Map(roleList.map((role) => [role.id, role]));
+  const rolesByUser = new Map<string, Role[]>();
+
+  for (const link of memberRoles.data ?? []) {
+    const role = roleById.get(link.role_id);
+    if (!role) continue;
+    const list = rolesByUser.get(link.user_id);
+    if (list) list.push(role);
+    else rolesByUser.set(link.user_id, [role]);
+  }
+
+  const team: TeamMember[] = (members.data ?? [])
+    .flatMap((member) => {
+      const profile = member.profiles as unknown as Profile | null;
+      if (!profile) return [];
+      return [
+        {
+          user_id: member.user_id,
+          created_at: member.created_at,
+          profile,
+          roles: (rolesByUser.get(member.user_id) ?? []).sort((a, b) => a.position - b.position),
+        },
+      ];
+    })
+    .sort((a, b) => a.profile.full_name.localeCompare(b.profile.full_name));
+
+  const myRoles = rolesByUser.get(userId) ?? [];
+  const myRoleIds = new Set(myRoles.map((role) => role.id));
+  const links = (roleStages.data ?? []) as RoleStage[];
+
+  return {
+    pipelines: (pipelines.data ?? []) as Pipeline[],
+    stages: (stages.data ?? []) as Stage[],
+    roles: roleList,
+    roleStages: links,
+    members: team,
+    myRoles,
+    managedStageIds: [
+      ...new Set(links.filter((link) => myRoleIds.has(link.role_id)).map((l) => l.stage_id)),
+    ],
+  };
+}
 
 export async function getBoardVideos(workspaceId: string): Promise<BoardVideo[]> {
   const supabase = await supabaseServer();
@@ -32,7 +117,6 @@ export async function getBoardVideos(workspaceId: string): Promise<BoardVideo[]>
     .from("videos")
     .select(BOARD_SELECT)
     .eq("workspace_id", workspaceId)
-    .neq("status", "archived")
     .order("position", { ascending: true });
 
   if (error) throw new Error(error.message);
@@ -50,26 +134,6 @@ export async function getChannels(
   const { data, error } = await query.order("name", { ascending: true });
   if (error) throw new Error(error.message);
   return data ?? [];
-}
-
-export async function getTeamMembers(workspaceId: string): Promise<TeamMember[]> {
-  const supabase = await supabaseServer();
-  const { data, error } = await supabase
-    .from("workspace_members")
-    .select("user_id, role, created_at, profiles(*)")
-    .eq("workspace_id", workspaceId);
-
-  if (error) throw new Error(error.message);
-
-  return (data ?? [])
-    .flatMap((member) => {
-      const profile = member.profiles as unknown as Profile | null;
-      if (!profile) return [];
-      return [
-        { user_id: member.user_id, role: member.role, created_at: member.created_at, profile },
-      ];
-    })
-    .sort((a, b) => a.profile.full_name.localeCompare(b.profile.full_name));
 }
 
 export async function getPendingInvitations(workspaceId: string): Promise<Invitation[]> {
@@ -98,7 +162,8 @@ export async function getWorkspaceStats(workspaceId: string): Promise<WorkspaceS
       overdue: 0,
       members: 0,
       channels: 0,
-      by_status: {},
+      pipelines: 0,
+      by_stage: {},
     };
   }
 
@@ -126,20 +191,44 @@ export async function getActivity(workspaceId: string, limit = 12): Promise<Acti
   }));
 }
 
-/** Próximos vencimientos: lo que no esta publicado y tiene fecha. */
-export async function getUpcoming(workspaceId: string, limit = 6) {
+export async function getNotifications(workspaceId: string, limit = 20): Promise<Notification[]> {
   const supabase = await supabaseServer();
   const { data, error } = await supabase
-    .from("videos")
-    .select("id, ref, title, status, priority, due_date, publish_at, channel_id")
+    .from("notifications")
+    .select("*")
     .eq("workspace_id", workspaceId)
-    .not("due_date", "is", null)
-    .not("status", "in", "(published,archived)")
-    .order("due_date", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(limit);
 
   if (error) return [];
   return data ?? [];
+}
+
+/** Proximos vencimientos: lo que no esta publicado y tiene fecha. */
+export async function getUpcoming(workspaceId: string, limit = 6) {
+  const supabase = await supabaseServer();
+  const { data, error } = await supabase
+    .from("videos")
+    .select(
+      "id, ref, title, priority, due_date, publish_at, channel_id, stage_id, stages!inner(kind)",
+    )
+    .eq("workspace_id", workspaceId)
+    .not("due_date", "is", null)
+    .not("stages.kind", "in", "(done,archived)")
+    .order("due_date", { ascending: true })
+    .limit(limit);
+
+  if (error) return [];
+  return (data ?? []) as unknown as {
+    id: string;
+    ref: string;
+    title: string;
+    priority: Video["priority"];
+    due_date: string | null;
+    publish_at: string | null;
+    channel_id: string | null;
+    stage_id: string;
+  }[];
 }
 
 export interface VideoDetail extends Video {
@@ -147,10 +236,13 @@ export interface VideoDetail extends Video {
   checklist_items: {
     id: string;
     title: string;
-    stage: Video["status"] | null;
-    assignee_id: string | null;
+    stage_id: string | null;
+    role_id: string | null;
     is_done: boolean;
+    done_at: string | null;
+    completed_by: string | null;
     position: number;
+    checklist_assignees: { user_id: string }[];
   }[];
   comments: { id: string; body: string; author_id: string | null; created_at: string }[];
   assets: { id: string; kind: string; label: string; url: string; created_at: string }[];
@@ -161,7 +253,7 @@ export async function getVideoDetail(id: string): Promise<VideoDetail | null> {
   const { data, error } = await supabase
     .from("videos")
     .select(
-      "*, video_assignees(user_id), checklist_items(id, title, stage, assignee_id, is_done, position), comments(id, body, author_id, created_at), assets(id, kind, label, url, created_at)",
+      "*, video_assignees(user_id), checklist_items(id, title, stage_id, role_id, is_done, done_at, completed_by, position, checklist_assignees(user_id)), comments(id, body, author_id, created_at), assets(id, kind, label, url, created_at)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -175,10 +267,10 @@ export async function getMyWork(workspaceId: string, userId: string): Promise<Bo
   const supabase = await supabaseServer();
   const { data, error } = await supabase
     .from("videos")
-    .select(`${BOARD_SELECT}, assigned:video_assignees!inner(user_id)`)
+    .select(`${BOARD_SELECT}, assigned:video_assignees!inner(user_id), stages!inner(kind)`)
     .eq("workspace_id", workspaceId)
     .eq("assigned.user_id", userId)
-    .not("status", "in", "(published,archived)")
+    .not("stages.kind", "in", "(done,archived)")
     .order("due_date", { ascending: true, nullsFirst: false })
     .limit(20);
 
@@ -189,19 +281,21 @@ export async function getMyWork(workspaceId: string, userId: string): Promise<Bo
 export interface AnalyticsVideo {
   id: string;
   channel_id: string | null;
-  status: Video["status"];
+  stage_id: string;
   created_at: string;
   published_at: string | null;
   due_date: string | null;
   video_assignees: { user_id: string }[];
 }
 
-/** Datos crudos para la pantalla de analíticas (incluye publicados y archivados). */
+/** Datos crudos para la pantalla de analiticas. */
 export async function getAnalyticsVideos(workspaceId: string): Promise<AnalyticsVideo[]> {
   const supabase = await supabaseServer();
   const { data, error } = await supabase
     .from("videos")
-    .select("id, channel_id, status, created_at, published_at, due_date, video_assignees(user_id)")
+    .select(
+      "id, channel_id, stage_id, created_at, published_at, due_date, video_assignees(user_id)",
+    )
     .eq("workspace_id", workspaceId);
 
   if (error) return [];

@@ -1,6 +1,5 @@
 import { positionForIndex } from "@/lib/domain/pipeline";
 import type { BoardVideo } from "@/server/queries";
-import type { VideoStatus } from "@/types/database";
 
 /** Filtros de la barra del tablero. */
 export interface BoardFilters {
@@ -8,6 +7,11 @@ export interface BoardFilters {
   assigneeId: string | null;
   due: "all" | "overdue" | "week" | "none";
   query: string;
+}
+
+/** Tarjetas de un pipeline concreto. */
+export function videosOfPipeline(videos: BoardVideo[], pipelineId: string): BoardVideo[] {
+  return videos.filter((video) => video.pipeline_id === pipelineId);
 }
 
 export const EMPTY_FILTERS: BoardFilters = {
@@ -21,12 +25,12 @@ const byPosition = (a: BoardVideo, b: BoardVideo) =>
   a.position - b.position || a.created_at.localeCompare(b.created_at);
 
 /** Agrupa y ordena las tarjetas por columna. */
-export function groupByStage(videos: BoardVideo[]): Map<VideoStatus, BoardVideo[]> {
-  const groups = new Map<VideoStatus, BoardVideo[]>();
+export function groupByStage(videos: BoardVideo[]): Map<string, BoardVideo[]> {
+  const groups = new Map<string, BoardVideo[]>();
   for (const video of videos) {
-    const list = groups.get(video.status);
+    const list = groups.get(video.stage_id);
     if (list) list.push(video);
-    else groups.set(video.status, [video]);
+    else groups.set(video.stage_id, [video]);
   }
   for (const list of groups.values()) list.sort(byPosition);
   return groups;
@@ -77,14 +81,14 @@ export function applyFilters(videos: BoardVideo[], filters: BoardFilters): Board
 export function computeMove(
   videos: BoardVideo[],
   videoId: string,
-  toStage: VideoStatus,
+  toStageId: string,
   toIndex: number,
 ): { position: number; videos: BoardVideo[] } | null {
   const moving = videos.find((video) => video.id === videoId);
   if (!moving) return null;
 
   const target = videos
-    .filter((video) => video.status === toStage && video.id !== videoId)
+    .filter((video) => video.stage_id === toStageId && video.id !== videoId)
     .sort(byPosition);
 
   const index = Math.max(0, Math.min(toIndex, target.length));
@@ -94,7 +98,7 @@ export function computeMove(
   );
 
   const next = videos.map((video) =>
-    video.id === videoId ? { ...video, status: toStage, position } : video,
+    video.id === videoId ? { ...video, stage_id: toStageId, position } : video,
   );
 
   return { position, videos: next };

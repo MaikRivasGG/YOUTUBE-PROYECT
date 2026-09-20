@@ -13,19 +13,40 @@ export function BoardFiltersBar({
   total,
   visible,
   connection,
+  pipelineId,
+  onPipelineChange,
 }: {
   filters: BoardFilters;
   onChange: (filters: BoardFilters) => void;
   total: number;
   visible: number;
   connection: "connecting" | "live" | "offline";
+  pipelineId: string;
+  onPipelineChange: (pipelineId: string) => void;
 }) {
-  const { channels, members } = useWorkspace();
+  const { channels, members, pipelines } = useWorkspace();
   const filtered = visible !== total;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <h2 className="text-ink-900 text-[15px] font-semibold">Pipeline</h2>
+      {pipelines.length > 1 ? (
+        <Select
+          aria-label="Pipeline"
+          className="h-8 w-auto min-w-36 text-[13px] font-semibold"
+          value={pipelineId}
+          onChange={(event) => onPipelineChange(event.target.value)}
+        >
+          {pipelines.map((pipeline) => (
+            <option key={pipeline.id} value={pipeline.id}>
+              {pipeline.name}
+            </option>
+          ))}
+        </Select>
+      ) : (
+        <h2 className="text-ink-900 text-[15px] font-semibold">
+          {pipelines[0]?.name ?? "Pipeline"}
+        </h2>
+      )}
       <span className="bg-column text-ink-500 rounded-full px-2 py-0.5 text-[11px] font-medium">
         {filtered ? `${visible} de ${total}` : `${total} tareas`}
       </span>

@@ -1,43 +1,40 @@
 "use client";
 
-import { Check, Copy, MailPlus, Trash2, UserMinus } from "lucide-react";
+import { Check, Copy, MailPlus, Shield, Trash2, UserMinus } from "lucide-react";
 import * as React from "react";
 import { useActionState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { useWorkspace } from "@/components/providers/workspace-provider";
 import { Avatar } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Field, Input, Select } from "@/components/ui/field";
+import { Menu, MenuItem, MenuLabel } from "@/components/ui/menu";
 import { Card, EmptyState } from "@/components/ui/misc";
 import { relative } from "@/lib/dates";
-import { ASSIGNABLE_ROLES, roleMeta } from "@/lib/domain/roles";
-import { cn } from "@/lib/utils";
+import { roleSummary } from "@/lib/domain/roles";
 import {
-  changeMemberRoleAction,
   inviteMemberAction,
   removeMemberAction,
   revokeInvitationAction,
+  setMemberRolesAction,
 } from "@/server/actions/team";
-import type { Invitation, Profile, WorkspaceRole } from "@/types/database";
+import type { Invitation, Role } from "@/types/database";
 
-export interface TeamRow {
-  user_id: string;
-  role: WorkspaceRole;
-  created_at: string;
-  profile: Profile;
+function RoleChip({ role }: { role: Role }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+      style={{ backgroundColor: `${role.color}1a`, color: role.color }}
+    >
+      {role.name}
+    </span>
+  );
 }
 
-export function TeamPanel({
-  members,
-  invitations,
-}: {
-  members: TeamRow[];
-  invitations: Invitation[];
-}) {
-  const { can, userId, role: myRole } = useWorkspace();
+export function TeamPanel({ invitations }: { invitations: Invitation[] }) {
+  const { can, isOwner, userId, members, roles, roleById, stagesOfRole } = useWorkspace();
   const [inviteOpen, setInviteOpen] = React.useState(false);
   const [pending, startTransition] = useTransition();
 
@@ -50,7 +47,7 @@ export function TeamPanel({
           <div>
             <h2 className="text-ink-900 text-[15px] font-semibold">Miembros</h2>
             <p className="text-ink-500 text-[12.5px]">
-              {members.length} personas con acceso a este equipo
+              Cada persona puede llevar varios roles a la vez
             </p>
           </div>
           {canManage ? (
@@ -63,10 +60,9 @@ export function TeamPanel({
 
         <ul className="divide-line divide-y">
           {members.map((member) => {
-            const meta = roleMeta(member.role);
             const isSelf = member.user_id === userId;
-            const canEditRow =
-              canManage && !isSelf && (member.role !== "owner" || myRole === "owner");
+            const memberIsOwner = member.roles.some((role) => role.key === "owner");
+            const canEditRow = canManage && (!memberIsOwner || isOwner);
 
             return (
               <li key={member.user_id} className="flex flex-wrap items-center gap-3 px-4 py-3">
@@ -87,36 +83,85 @@ export function TeamPanel({
                   <p className="text-ink-500 truncate text-[12px]">{member.profile.email}</p>
                 </div>
 
-                <span className="text-ink-400 hidden text-[11.5px] sm:block">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {member.roles.length === 0 ? (
+                    <span className="text-ink-400 text-[11.5px]">Sin rol asignado</span>
+                  ) : null}
+                  {member.roles.map((role) => (
+                    <RoleChip key={role.id} role={role} />
+                  ))}
+                </div>
+
+                <span className="text-ink-400 hidden text-[11.5px] lg:block">
                   {relative(member.created_at)}
                 </span>
 
                 {canEditRow ? (
-                  <Select
-                    aria-label={`Rol de ${member.profile.full_name}`}
-                    className="h-8 w-auto min-w-36 text-[12.5px]"
-                    defaultValue={member.role}
-                    disabled={pending}
-                    onChange={(event) => {
-                      const next = event.target.value;
-                      startTransition(async () => {
-                        const result = await changeMemberRoleAction(member.user_id, next);
-                        if (!result.ok) toast.error(result.error);
-                        else toast.success("Rol actualizado");
-                      });
-                    }}
+                  <Menu
+                    className="w-64"
+                    trigger={({ toggle }) => (
+                      <button
+                        type="button"
+                        onClick={toggle}
+                        disabled={pending}
+                        aria-label={`Roles de ${member.profile.full_name}`}
+                        className="text-ink-500 hover:bg-canvas hover:text-ink-900 ring-line inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] ring-1 transition"
+                      >
+                        <Shield className="size-3.5" aria-hidden />
+                        Roles
+                      </button>
+                    )}
                   >
-                    {ASSIGNABLE_ROLES.map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </Select>
-                ) : (
-                  <Badge className={cn("ring-1", meta.chip)}>{meta.label}</Badge>
-                )}
+                    {() => (
+                      <>
+                        <MenuLabel>Roles de esta persona</MenuLabel>
+                        {roles.map((role) => {
+                          const active = member.roles.some((item) => item.id === role.id);
+                          const blocked = role.key === "owner" && !isOwner;
 
-                {canEditRow ? (
+                          return (
+                            <MenuItem
+                              key={role.id}
+                              disabled={blocked}
+                              onClick={() => {
+                                const next = active
+                                  ? member.roles.filter((item) => item.id !== role.id)
+                                  : [...member.roles, role];
+
+                                startTransition(async () => {
+                                  const result = await setMemberRolesAction(
+                                    member.user_id,
+                                    next.map((item) => item.id),
+                                  );
+                                  if (!result.ok) toast.error(result.error);
+                                  else toast.success("Roles actualizados");
+                                });
+                              }}
+                            >
+                              <span
+                                className="size-2 shrink-0 rounded-full"
+                                style={{ backgroundColor: role.color }}
+                              />
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate">{role.name}</span>
+                                <span className="text-ink-400 block truncate text-[11px]">
+                                  {stagesOfRole(role.id)
+                                    .map((stage) => stage.name)
+                                    .join(", ") || "Sin etapas asignadas"}
+                                </span>
+                              </span>
+                              {active ? (
+                                <Check className="text-brand-600 size-4 shrink-0" aria-hidden />
+                              ) : null}
+                            </MenuItem>
+                          );
+                        })}
+                      </>
+                    )}
+                  </Menu>
+                ) : null}
+
+                {canEditRow && !isSelf ? (
                   <button
                     type="button"
                     aria-label={`Quitar a ${member.profile.full_name}`}
@@ -152,27 +197,53 @@ export function TeamPanel({
           {invitations.length === 0 ? (
             <EmptyState
               title="No hay invitaciones abiertas"
-              description="Invita a tu guionista, editor o diseñador para repartir el trabajo."
+              description="Invita a tu guionista, editor o disenador para repartir el trabajo."
               className="m-4 border-0"
             />
           ) : (
             <ul className="divide-line divide-y">
               {invitations.map((invitation) => (
-                <InvitationRow key={invitation.id} invitation={invitation} />
+                <InvitationRow
+                  key={invitation.id}
+                  invitation={invitation}
+                  roleName={roleById(invitation.role_id)?.name ?? "Rol"}
+                />
               ))}
             </ul>
           )}
         </Card>
       ) : null}
 
-      <RolesLegend />
+      <Card className="p-4">
+        <h2 className="text-ink-900 mb-3 text-[15px] font-semibold">Que puede cada rol</h2>
+        <ul className="space-y-2.5">
+          {roles.map((role) => (
+            <li key={role.id} className="flex items-start gap-2.5">
+              <RoleChip role={role} />
+              <span className="min-w-0 flex-1">
+                <span className="text-ink-500 block text-[12.5px]">{roleSummary(role)}</span>
+                <span className="text-ink-400 block text-[11.5px]">
+                  Etapas:{" "}
+                  {stagesOfRole(role.id)
+                    .map((stage) => stage.name)
+                    .join(", ") || "ninguna"}
+                </span>
+              </span>
+            </li>
+          ))}
+        </ul>
+        <p className="text-ink-400 mt-3 text-[12px]">
+          Ademas de sus permisos, cada rol puede mover las tarjetas de sus etapas y recibe aviso
+          cuando entra una tarjeta en ellas. Los roles se editan desde Ajustes.
+        </p>
+      </Card>
 
       <InviteDialog open={inviteOpen} onOpenChange={setInviteOpen} />
     </div>
   );
 }
 
-function InvitationRow({ invitation }: { invitation: Invitation }) {
+function InvitationRow({ invitation, roleName }: { invitation: Invitation; roleName: string }) {
   const [copied, setCopied] = React.useState(false);
   const [pending, startTransition] = useTransition();
   const url = `${typeof window === "undefined" ? "" : window.location.origin}/invitacion/${invitation.token}`;
@@ -182,7 +253,7 @@ function InvitationRow({ invitation }: { invitation: Invitation }) {
       <div className="min-w-0 flex-1">
         <p className="text-ink-900 truncate text-[13px] font-medium">{invitation.email}</p>
         <p className="text-ink-400 text-[11.5px]">
-          {roleMeta(invitation.role).label} - caduca {relative(invitation.expires_at).toLowerCase()}
+          {roleName} · caduca {relative(invitation.expires_at).toLowerCase()}
         </p>
       </div>
 
@@ -209,14 +280,14 @@ function InvitationRow({ invitation }: { invitation: Invitation }) {
 
       <button
         type="button"
-        aria-label="Revocar invitación"
+        aria-label="Revocar invitacion"
         disabled={pending}
         className="text-ink-400 rounded-lg p-1.5 transition hover:bg-red-50 hover:text-red-600"
         onClick={() =>
           startTransition(async () => {
             const result = await revokeInvitationAction(invitation.id);
             if (!result.ok) toast.error(result.error);
-            else toast.success("Invitación revocada");
+            else toast.success("Invitacion revocada");
           })
         }
       >
@@ -233,6 +304,7 @@ function InviteDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const { roles } = useWorkspace();
   const [state, formAction, pending] = useActionState(inviteMemberAction, null);
 
   const inviteUrl =
@@ -240,17 +312,19 @@ function InviteDialog({
       ? (state.data as { inviteUrl: string }).inviteUrl
       : null;
 
+  const assignable = roles.filter((role) => role.key !== "owner");
+
   return (
     <Dialog
       open={open}
       onClose={() => onOpenChange(false)}
       title="Invitar al equipo"
-      description="Elige el rol segun la línea de trabajo que va a cubrir."
+      description="Elige el rol segun la linea de trabajo que va a cubrir. Luego puedes darle mas roles."
     >
       {inviteUrl ? (
         <div className="space-y-3">
           <p className="text-ink-700 text-[13px]">
-            Invitación creada. Envia este enlace a la persona:
+            Invitacion creada. Envia este enlace a la persona:
           </p>
           <div className="bg-canvas ring-line flex items-center gap-2 rounded-lg px-3 py-2 ring-1">
             <code className="text-ink-700 min-w-0 flex-1 truncate text-[12px]">{inviteUrl}</code>
@@ -286,40 +360,20 @@ function InviteDialog({
           </Field>
 
           <Field label="Rol" htmlFor="invite-role">
-            <Select id="invite-role" name="role" defaultValue="writer">
-              {ASSIGNABLE_ROLES.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label} - {item.description}
+            <Select id="invite-role" name="role_id" defaultValue={assignable[0]?.id}>
+              {assignable.map((role) => (
+                <option key={role.id} value={role.id}>
+                  {role.name}
                 </option>
               ))}
             </Select>
           </Field>
 
           <Button type="submit" loading={pending} className="w-full justify-center">
-            Crear invitación
+            Crear invitacion
           </Button>
         </form>
       )}
     </Dialog>
-  );
-}
-
-function RolesLegend() {
-  return (
-    <Card className="p-4">
-      <h2 className="text-ink-900 mb-3 text-[15px] font-semibold">Que puede hacer cada rol</h2>
-      <ul className="grid gap-2 sm:grid-cols-2">
-        {ASSIGNABLE_ROLES.concat(roleMeta("owner")).map((item) => (
-          <li key={item.value} className="flex items-start gap-2.5">
-            <Badge className={cn("mt-0.5 shrink-0 ring-1", item.chip)}>{item.label}</Badge>
-            <span className="text-ink-500 text-[12.5px]">{item.description}</span>
-          </li>
-        ))}
-      </ul>
-      <p className="text-ink-400 mt-3 text-[12px]">
-        Ademas de los permisos generales, cada rol puede mover las tarjetas de su etapa del pipeline
-        (guion, grabación, edición, miniatura, publicación) y las que tenga asignadas.
-      </p>
-    </Card>
   );
 }

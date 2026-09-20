@@ -4,12 +4,12 @@ import Link from "next/link";
 import { Card } from "@/components/ui/misc";
 import { dueLabel, isOverdue, time } from "@/lib/dates";
 import { cn } from "@/lib/utils";
-import type { VideoPriority, VideoStatus } from "@/types/database";
+import type { VideoPriority } from "@/types/database";
 
 export interface UpcomingItem {
   id: string;
   title: string;
-  status: VideoStatus;
+  stage_id: string;
   priority: VideoPriority;
   due_date: string | null;
   publish_at: string | null;

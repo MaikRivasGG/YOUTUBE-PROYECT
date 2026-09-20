@@ -27,13 +27,12 @@ import {
   applyFilters,
   computeMove,
   groupByStage,
+  videosOfPipeline,
   type BoardFilters,
 } from "@/lib/board-state";
-import { PIPELINE } from "@/lib/domain/pipeline";
 import { canMoveVideo } from "@/lib/domain/roles";
 import { errorMessage } from "@/lib/utils";
 import type { BoardVideo } from "@/server/queries";
-import type { VideoStatus } from "@/types/database";
 
 export function Board({
   initialVideos,
@@ -42,8 +41,31 @@ export function Board({
   initialVideos: BoardVideo[];
   initialChannelFilter?: string | null;
 }) {
-  const { workspaceId, role, userId } = useWorkspace();
-  const { videos, setVideos, connection } = useRealtimeBoard(workspaceId, initialVideos);
+  const workspace = useWorkspace();
+  const { workspaceId, myRoles, managedStages, userId, pipelines, defaultPipeline } = workspace;
+
+  const [pipelineId, setPipelineId] = React.useState(
+    () => defaultPipeline?.id ?? pipelines[0]?.id ?? "",
+  );
+
+  // Las etapas archivadas no se pintan: lo que cae ahi sale del tablero.
+  const hiddenStageIds = React.useMemo(
+    () =>
+      new Set(
+        pipelines.flatMap((pipeline) => {
+          const archived = workspace.archivedStageOf(pipeline.id);
+          return archived ? [archived.id] : [];
+        }),
+      ),
+    [pipelines, workspace],
+  );
+
+  const { videos, setVideos, connection } = useRealtimeBoard(
+    workspaceId,
+    initialVideos,
+    hiddenStageIds,
+  );
+
   const [filters, setFilters] = React.useState<BoardFilters>({
     ...EMPTY_FILTERS,
     channelId: initialChannelFilter ?? null,
@@ -51,25 +73,32 @@ export function Board({
   const [draggingId, setDraggingId] = React.useState<string | null>(null);
 
   const sensors = useSensors(
-    // Un umbral pequeno evita que un click en el título inicie un arrastre.
+    // Un umbral pequeno evita que un click en el titulo inicie un arrastre.
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const visible = React.useMemo(() => applyFilters(videos, filters), [videos, filters]);
+  const stages = workspace.stagesOf(pipelineId);
+  const inPipeline = React.useMemo(
+    () =>
+      videosOfPipeline(videos, pipelineId).filter((video) => !hiddenStageIds.has(video.stage_id)),
+    [videos, pipelineId, hiddenStageIds],
+  );
+  const visible = React.useMemo(() => applyFilters(inPipeline, filters), [inPipeline, filters]);
   const grouped = React.useMemo(() => groupByStage(visible), [visible]);
   const dragging = draggingId ? videos.find((video) => video.id === draggingId) : null;
 
   const allowedToMove = React.useCallback(
-    (video: BoardVideo, to: VideoStatus) =>
+    (video: BoardVideo, toStageId: string) =>
       canMoveVideo({
-        role,
+        roles: myRoles,
+        managedStageIds: managedStages,
         userId,
         assigneeIds: video.video_assignees.map((assignee) => assignee.user_id),
-        from: video.status,
-        to,
+        fromStageId: video.stage_id,
+        toStageId,
       }),
-    [role, userId],
+    [myRoles, managedStages, userId],
   );
 
   function handleDragStart(event: DragStartEvent) {
@@ -86,41 +115,41 @@ export function Board({
     if (!moving) return;
 
     const overId = String(over.id);
-    const overData = over.data.current as { type?: string; status?: VideoStatus } | undefined;
+    const overData = over.data.current as { type?: string; stageId?: string } | undefined;
 
-    const targetStatus: VideoStatus =
+    const targetStageId =
       overData?.type === "column"
-        ? (overData.status as VideoStatus)
-        : ((videos.find((video) => video.id === overId)?.status ?? moving.status) as VideoStatus);
+        ? (overData.stageId as string)
+        : (videos.find((video) => video.id === overId)?.stage_id ?? moving.stage_id);
 
-    if (!allowedToMove(moving, targetStatus)) {
+    if (!allowedToMove(moving, targetStageId)) {
       toast.error("Tu rol no puede mover esta tarjeta a esa etapa");
       return;
     }
 
     // Indice de destino dentro de la columna, ya sin la tarjeta que se mueve.
     const targetList = videos
-      .filter((video) => video.status === targetStatus && video.id !== activeId)
+      .filter((video) => video.stage_id === targetStageId && video.id !== activeId)
       .sort((a, b) => a.position - b.position);
 
     const overIndex = targetList.findIndex((video) => video.id === overId);
     let index = overIndex === -1 ? targetList.length : overIndex;
 
-    const sameColumn = moving.status === targetStatus;
+    const sameColumn = moving.stage_id === targetStageId;
     const overVideo = targetList[overIndex];
     if (sameColumn && overVideo && moving.position < overVideo.position) {
       index = overIndex + 1;
     }
 
-    const result = computeMove(videos, activeId, targetStatus, index);
+    const result = computeMove(videos, activeId, targetStageId, index);
     if (!result) return;
-    if (targetStatus === moving.status && result.position === moving.position) return;
+    if (sameColumn && result.position === moving.position) return;
 
     const snapshot = videos;
     setVideos(result.videos); // Optimista: la tarjeta se mueve al instante.
 
     try {
-      await moveVideo(activeId, targetStatus, result.position);
+      await moveVideo(activeId, targetStageId, result.position);
     } catch (error) {
       setVideos(snapshot);
       toast.error(errorMessage(error, "No hemos podido mover la tarjeta"));
@@ -132,9 +161,11 @@ export function Board({
       <BoardFiltersBar
         filters={filters}
         onChange={setFilters}
-        total={videos.length}
+        total={inPipeline.length}
         visible={visible.length}
         connection={connection}
+        pipelineId={pipelineId}
+        onPipelineChange={setPipelineId}
       />
 
       <DndContext
@@ -146,14 +177,21 @@ export function Board({
         onDragCancel={() => setDraggingId(null)}
       >
         <div className="scrollbar-slim flex flex-1 gap-3 overflow-x-auto pb-4">
-          {PIPELINE.map((stage) => (
+          {stages.length === 0 ? (
+            <p className="text-ink-400 py-10 text-[13px]">
+              Este pipeline no tiene etapas todavia. Anadelas desde Ajustes.
+            </p>
+          ) : null}
+
+          {stages.map((stage) => (
             <BoardColumn
               key={stage.id}
               stage={stage}
+              pipelineId={pipelineId}
               videos={grouped.get(stage.id) ?? []}
               // Cualquier miembro puede arrastrar: el destino concreto se
               // valida al soltar y se avisa si su rol no lo permite.
-              canDrag={() => role !== "viewer"}
+              canDrag={() => workspace.can("video.edit")}
             />
           ))}
         </div>

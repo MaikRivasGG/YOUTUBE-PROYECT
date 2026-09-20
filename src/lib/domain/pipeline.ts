@@ -1,93 +1,39 @@
-import type { VideoPriority, VideoStatus } from "@/types/database";
+import type { Stage, StageKind, VideoPriority } from "@/types/database";
 
-export interface StageMeta {
-  id: VideoStatus;
-  label: string;
-  description: string;
-  /** Color del punto de la cabecera de columna. */
-  dot: string;
-  /** Color de acento suave para la columna. */
-  accent: string;
-}
-
-/** Columnas visibles del tablero, en orden de producción. */
-export const PIPELINE: StageMeta[] = [
-  {
-    id: "idea",
-    label: "Ideas",
-    description: "Backlog de temas validados y pendientes de guion.",
-    dot: "bg-slate-400",
-    accent: "text-slate-500",
-  },
-  {
-    id: "script",
-    label: "Guion",
-    description: "Escritura, hook y estructura del video.",
-    dot: "bg-blue-500",
-    accent: "text-blue-600",
-  },
-  {
-    id: "voiceover",
-    label: "Grabación",
-    description: "Voz en off y captura de material.",
-    dot: "bg-red-500",
-    accent: "text-red-600",
-  },
-  {
-    id: "editing",
-    label: "Edición",
-    description: "Montaje, subtitulos y musica.",
-    dot: "bg-orange-500",
-    accent: "text-orange-600",
-  },
-  {
-    id: "thumbnail",
-    label: "Miniatura",
-    description: "Diseño de miniatura y título final.",
-    dot: "bg-fuchsia-500",
-    accent: "text-fuchsia-600",
-  },
-  {
-    id: "review",
-    label: "Revisión",
-    description: "Control de calidad antes de publicar.",
-    dot: "bg-violet-500",
-    accent: "text-violet-600",
-  },
-  {
-    id: "scheduled",
-    label: "Programado",
-    description: "Subido a YouTube y con fecha de publicación.",
-    dot: "bg-emerald-500",
-    accent: "text-emerald-600",
-  },
-  {
-    id: "published",
-    label: "Publicado",
-    description: "En el aire.",
-    dot: "bg-teal-600",
-    accent: "text-teal-700",
-  },
+/**
+ * Que significa cada tipo de etapa para el sistema. El nombre de la columna lo
+ * pone el equipo; el tipo decide como se comporta.
+ */
+export const STAGE_KINDS: { value: StageKind; label: string; description: string }[] = [
+  { value: "backlog", label: "Ideas", description: "Pendiente de empezar." },
+  { value: "work", label: "En curso", description: "Trabajo de produccion." },
+  { value: "review", label: "Revision", description: "Control de calidad." },
+  { value: "scheduled", label: "Programado", description: "Listo y con fecha." },
+  { value: "done", label: "Publicado", description: "Sella la fecha de publicacion." },
+  { value: "archived", label: "Archivado", description: "Fuera del tablero." },
 ];
 
-export const STAGE_IDS = PIPELINE.map((stage) => stage.id);
+const STAGE_KIND_LABEL = new Map(STAGE_KINDS.map((kind) => [kind.value, kind.label]));
 
-const STAGE_MAP = new Map(PIPELINE.map((stage) => [stage.id, stage]));
-
-export const ARCHIVED_STAGE: StageMeta = {
-  id: "archived",
-  label: "Archivado",
-  description: "Descartado o pausado.",
-  dot: "bg-slate-300",
-  accent: "text-slate-400",
-};
-
-export function stageMeta(status: VideoStatus): StageMeta {
-  return STAGE_MAP.get(status) ?? ARCHIVED_STAGE;
+export function stageKindLabel(kind: StageKind): string {
+  return STAGE_KIND_LABEL.get(kind) ?? kind;
 }
 
-export function isBoardStage(status: VideoStatus): boolean {
-  return STAGE_MAP.has(status);
+export function sortStages(stages: Stage[]): Stage[] {
+  return [...stages].sort((a, b) => a.position - b.position);
+}
+
+/** Columnas visibles del tablero: todo menos lo archivado. */
+export function boardStages(stages: Stage[]): Stage[] {
+  return sortStages(stages.filter((stage) => stage.kind !== "archived"));
+}
+
+export function archivedStage(stages: Stage[]): Stage | undefined {
+  return stages.find((stage) => stage.kind === "archived");
+}
+
+export function stagesOfPipeline(stages: Stage[], pipelineId: string): Stage[] {
+  return sortStages(stages.filter((stage) => stage.pipeline_id === pipelineId));
 }
 
 export interface PriorityMeta {
@@ -141,4 +87,9 @@ export function positionForIndex(positions: number[], index: number): number {
  */
 export function needsRebalance(a: number, b: number): boolean {
   return Math.abs(b - a) < 0.0001;
+}
+
+/** Color de fondo suave a partir del color de una etapa o canal. */
+export function tint(color: string, alpha = "1a"): string {
+  return `${color}${alpha}`;
 }

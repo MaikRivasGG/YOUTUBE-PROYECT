@@ -6,10 +6,8 @@ import { useWorkspace } from "@/components/providers/workspace-provider";
 import { Avatar } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/misc";
 import { relative } from "@/lib/dates";
-import { stageMeta } from "@/lib/domain/pipeline";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import type { ActivityEntry } from "@/server/queries";
-import type { VideoStatus } from "@/types/database";
 
 /** Convierte una entrada de actividad en una frase legible. */
 export function describeActivity(entry: {
@@ -22,10 +20,8 @@ export function describeActivity(entry: {
   switch (entry.type) {
     case "video.created":
       return `creó "${title}"`;
-    case "video.moved": {
-      const to = stageMeta(payload.to as VideoStatus).label;
-      return `movió "${title}" a ${to}`;
-    }
+    case "video.moved":
+      return `movió "${title}" a ${String(payload.to ?? "otra etapa")}`;
     case "video.renamed":
       return `renombró "${String(payload.from ?? "")}" a "${String(payload.to ?? "")}"`;
     case "comment.created":

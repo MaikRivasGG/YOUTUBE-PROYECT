@@ -1,13 +1,15 @@
 "use client";
 
-import { Bell, Plus, Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import * as React from "react";
 
 import { CommandPalette } from "@/components/layout/command-palette";
+import { NotificationsBell } from "@/components/layout/notifications-bell";
 import { useWorkspace } from "@/components/providers/workspace-provider";
 import { Button } from "@/components/ui/button";
 import { CreateVideoDialog } from "@/components/video/create-video-dialog";
 import { longDate, weekNumber } from "@/lib/dates";
+import type { Notification } from "@/types/database";
 
 /**
  * Cabecera comun: título contextual, buscador global, avisos y accion primaria.
@@ -15,10 +17,12 @@ import { longDate, weekNumber } from "@/lib/dates";
 export function PageHeader({
   title,
   subtitle,
+  notifications = [],
   children,
 }: {
   title: string;
   subtitle?: string;
+  notifications?: Notification[];
   children?: React.ReactNode;
 }) {
   const { can } = useWorkspace();
@@ -69,14 +73,7 @@ export function PageHeader({
               <Search className="size-4" />
             </button>
 
-            <button
-              type="button"
-              aria-label="Notificaciones"
-              className="bg-canvas text-ink-500 hover:text-ink-900 ring-line relative grid size-9 place-items-center rounded-full ring-1 transition"
-            >
-              <Bell className="size-4" />
-              <span className="bg-brand-500 absolute top-2 right-2.5 size-1.5 rounded-full" />
-            </button>
+            <NotificationsBell initial={notifications} />
 
             {can("video.create") ? (
               <Button onClick={() => setCreateOpen(true)} className="rounded-full">

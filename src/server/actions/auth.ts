@@ -124,3 +124,22 @@ export async function updateProfileAction(_prev: State, formData: FormData): Pro
   revalidatePath("/", "layout");
   return ok(undefined);
 }
+
+/** Guarda (o quita) la foto de perfil ya subida a Storage. */
+export async function updateAvatarAction(url: string | null): Promise<ActionResult<undefined>> {
+  const supabase = await supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return fail("Sesion caducada");
+
+  if (url !== null && !/^https?:\/\//i.test(url)) {
+    return fail("La imagen no es valida");
+  }
+
+  const { error } = await supabase.from("profiles").update({ avatar_url: url }).eq("id", user.id);
+  if (error) return fail(errorMessage(error));
+
+  revalidatePath("/", "layout");
+  return ok(undefined);
+}

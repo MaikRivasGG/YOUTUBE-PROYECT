@@ -4,10 +4,14 @@ export function Badge({
   children,
   className,
   dot,
+  dotColor,
 }: {
   children: React.ReactNode;
   className?: string;
+  /** Clase de color para el punto (paleta de Tailwind). */
   dot?: string;
+  /** Color libre para el punto, cuando viene de la base de datos. */
+  dotColor?: string;
 }) {
   return (
     <span
@@ -16,7 +20,12 @@ export function Badge({
         className,
       )}
     >
-      {dot ? <span className={cn("size-1.5 rounded-full", dot)} /> : null}
+      {dot || dotColor ? (
+        <span
+          className={cn("size-1.5 shrink-0 rounded-full", dot)}
+          style={dotColor ? { backgroundColor: dotColor } : undefined}
+        />
+      ) : null}
       {children}
     </span>
   );

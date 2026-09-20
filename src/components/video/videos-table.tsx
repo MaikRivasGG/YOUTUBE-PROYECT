@@ -12,34 +12,40 @@ import { Card, EmptyState } from "@/components/ui/misc";
 import { useRealtimeBoard } from "@/hooks/use-realtime-board";
 import { applyFilters, EMPTY_FILTERS, progressOf, type BoardFilters } from "@/lib/board-state";
 import { dueLabel, isOverdue } from "@/lib/dates";
-import { PIPELINE, priorityMeta, stageMeta } from "@/lib/domain/pipeline";
+import { priorityMeta } from "@/lib/domain/pipeline";
 import { cn } from "@/lib/utils";
 import type { BoardVideo } from "@/server/queries";
-import type { VideoStatus } from "@/types/database";
 
 type SortKey = "due" | "title" | "stage" | "updated";
 
 export function VideosTable({ initialVideos }: { initialVideos: BoardVideo[] }) {
-  const { workspaceId, channels, channelById, memberById } = useWorkspace();
+  const {
+    workspaceId,
+    channels,
+    channelById,
+    memberById,
+    stageById,
+    stages: allStages,
+  } = useWorkspace();
   const { videos } = useRealtimeBoard(workspaceId, initialVideos);
 
   const [filters, setFilters] = React.useState<BoardFilters>(EMPTY_FILTERS);
-  const [stage, setStage] = React.useState<VideoStatus | "">("");
+  const [stage, setStage] = React.useState<string>("");
   const [sort, setSort] = React.useState<SortKey>("due");
 
   const rows = React.useMemo(() => {
     const filtered = applyFilters(videos, filters).filter(
-      (video) => !stage || video.status === stage,
+      (video) => !stage || video.stage_id === stage,
     );
 
-    const order = PIPELINE.map((item) => item.id);
+    const order = allStages.map((item) => item.id);
 
     return [...filtered].sort((a, b) => {
       switch (sort) {
         case "title":
           return a.title.localeCompare(b.title);
         case "stage":
-          return order.indexOf(a.status) - order.indexOf(b.status);
+          return order.indexOf(a.stage_id) - order.indexOf(b.stage_id);
         case "updated":
           return b.updated_at.localeCompare(a.updated_at);
         default: {
@@ -50,7 +56,7 @@ export function VideosTable({ initialVideos }: { initialVideos: BoardVideo[] }) 
         }
       }
     });
-  }, [videos, filters, stage, sort]);
+  }, [videos, filters, stage, sort, allStages]);
 
   return (
     <div className="space-y-3">
@@ -73,14 +79,16 @@ export function VideosTable({ initialVideos }: { initialVideos: BoardVideo[] }) 
           aria-label="Etapa"
           className="w-auto min-w-36"
           value={stage}
-          onChange={(event) => setStage(event.target.value as VideoStatus | "")}
+          onChange={(event) => setStage(event.target.value)}
         >
           <option value="">Todas las etapas</option>
-          {PIPELINE.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.label}
-            </option>
-          ))}
+          {allStages
+            .filter((item) => item.kind !== "archived")
+            .map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
         </Select>
 
         <Select
@@ -133,7 +141,7 @@ export function VideosTable({ initialVideos }: { initialVideos: BoardVideo[] }) 
               <tbody className="divide-line divide-y">
                 {rows.map((video) => {
                   const channel = channelById(video.channel_id);
-                  const stageInfo = stageMeta(video.status);
+                  const stageInfo = stageById(video.stage_id);
                   const priority = priorityMeta(video.priority);
                   const due = dueLabel(video.due_date);
                   const people = video.video_assignees
@@ -162,9 +170,11 @@ export function VideosTable({ initialVideos }: { initialVideos: BoardVideo[] }) 
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <Badge className="bg-column text-ink-700" dot={stageInfo.dot}>
-                          {stageInfo.label}
-                        </Badge>
+                        {stageInfo ? (
+                          <Badge className="bg-column text-ink-700" dotColor={stageInfo.color}>
+                            {stageInfo.name}
+                          </Badge>
+                        ) : null}
                       </td>
                       <td className="px-4 py-3">
                         <Badge className={priority.chip}>{priority.label}</Badge>

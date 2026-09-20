@@ -40,22 +40,24 @@ crucen el continente.
 
 ## Que incluye
 
-| Pantalla                        | Ruta                                | Que resuelve                                                                                                 |
-| ------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Login / registro / recuperacion | `/login`, `/registro`, `/recuperar` | Acceso con email y contrasena sobre Supabase Auth                                                            |
-| Onboarding                      | `/bienvenida`                       | Crear equipo o cargar un equipo de demostracion con datos reales                                             |
-| Pipeline de produccion          | `/produccion`                       | Tablero kanban con drag & drop, filtros, carga del equipo, vencimientos, mini calendario y actividad en vivo |
-| Resumen                         | `/resumen`                          | Dashboard personal: mis tarjetas, KPIs del mes, carga por etapa                                              |
-| Calendario editorial            | `/calendario`                       | Mes completo con lo que se publica cada dia                                                                  |
-| Videos                          | `/videos`                           | Vista tabla con busqueda, filtros y orden                                                                    |
-| Ficha de video                  | `/videos/[id]`                      | Guion, hook, brief, checklist, archivos, asignados y comentarios en vivo                                     |
-| Equipo                          | `/equipo`                           | Miembros, cambio de rol, invitaciones por enlace                                                             |
-| Canales                         | `/canales`                          | Alta y edicion de canales, color, nicho y ritmo objetivo                                                     |
-| Analiticas                      | `/analiticas`                       | Publicaciones por mes, tiempo de ciclo, entregas a tiempo y carga por persona                                |
-| Ajustes                         | `/ajustes`                          | Perfil, nombre del equipo y mapa de responsables por etapa                                                   |
+| Pantalla                        | Ruta                                | Que resuelve                                                                                                      |
+| ------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Login / registro / recuperacion | `/login`, `/registro`, `/recuperar` | Acceso con email y contrasena sobre Supabase Auth                                                                 |
+| Onboarding                      | `/bienvenida`                       | Crear equipo o cargar un equipo de demostracion con datos reales                                                  |
+| Pipeline de produccion          | `/produccion`                       | Tablero kanban con drag & drop, selector de pipeline, filtros, carga del equipo, vencimientos y actividad en vivo |
+| Resumen                         | `/resumen`                          | Dashboard personal: mis tarjetas, KPIs del mes, carga por etapa                                                   |
+| Calendario editorial            | `/calendario`                       | Mes completo con lo que se publica cada dia                                                                       |
+| Videos                          | `/videos`                           | Vista tabla con busqueda, filtros y orden                                                                         |
+| Ficha de video                  | `/videos/[id]`                      | Guion, hook, brief, checklist por rol, archivos, asignados y comentarios en vivo                                  |
+| Equipo                          | `/equipo`                           | Miembros con varios roles cada uno, invitaciones por enlace                                                       |
+| Canales                         | `/canales`                          | Alta y edicion de canales: miniatura, color, nicho, pipeline y ritmo objetivo                                     |
+| Analiticas                      | `/analiticas`                       | Publicaciones por mes, tiempo de ciclo, entregas a tiempo y carga por persona                                     |
+| Ajustes                         | `/ajustes`                          | Perfil con foto, equipo, editor de pipelines, editor de roles y eliminacion del equipo                            |
 
-Extras: buscador global con `Ctrl/Cmd + K`, invitaciones con enlace y token,
-estado de conexion en vivo, menu responsive y soporte de teclado en el tablero.
+Extras: buscador global con `Ctrl/Cmd + K`, **avisos en vivo** en la campana
+(cuando una tarjeta entra en una etapa que gestiona tu rol, cuando te asignan
+algo o cuando alguien comenta), invitaciones con enlace y token, estado de
+conexion en vivo, menu responsive y soporte de teclado en el tablero.
 
 ---
 
@@ -124,8 +126,9 @@ NEXT_PUBLIC_SITE_URL="http://localhost:3000"
 
 Opcion A — **un solo copia y pega** (lo mas rapido): abre
 **SQL Editor → New query**, pega entero el fichero [`supabase/setup.sql`](supabase/setup.sql)
-y pulsa _Run_. Deja las 11 tablas, las 37 politicas RLS y las 21 funciones
-listas de una vez.
+y pulsa _Run_. Deja las 18 tablas, las 52 politicas RLS, las 32 funciones y los
+dos cubos de imagenes (`avatars` y `channels`, con sus 8 politicas de Storage)
+listos de una vez.
 
 Opcion B — **Supabase CLI**, si prefieres llevar las migraciones versionadas:
 
@@ -184,59 +187,83 @@ administracion propios.
 ## Modelo de datos
 
 ```
-profiles ──< workspace_members >── workspaces ──< channels
-                                        │            │
-                                        └──< videos >─┘
+profiles ──< workspace_members >── workspaces ──< pipelines ──< stages
+               │                        │             │            │
+               └──< member_roles >── roles ──< role_stages ────────┘
+                                        │
+                                   channels ──< videos >── stages
                                               ├──< video_assignees >── profiles
-                                              ├──< checklist_items
+                                              ├──< checklist_items >──< checklist_assignees
                                               ├──< comments
                                               └──< assets
-                                     activity (feed del equipo)
-                                     invitations (alta por enlace)
+                                     activity      (feed del equipo)
+                                     notifications (avisos por persona)
+                                     invitations   (alta por enlace)
 ```
 
 Detalles que conviene conocer:
 
+- **Las etapas y los roles son datos, no codigo.** Cada equipo define sus
+  pipelines (varios), sus etapas y sus roles desde Ajustes. Lo unico fijo es
+  `stage_kind`, que no es el nombre de la columna sino lo que significa para el
+  sistema: `backlog`, `work`, `review`, `scheduled`, `done` (sella la fecha de
+  publicacion) y `archived` (fuera del tablero).
 - **`videos.ref`** se genera solo (`VID-0001`) con un contador por equipo.
 - **`videos.position`** es `double precision` con huecos de 1000: reordenar una
   tarjeta es **un solo UPDATE**, no reescribir la columna entera.
-- **`published_at`** se sella automaticamente al entrar en la etapa `published`.
-- **`activity`** se escribe desde triggers, nunca desde el cliente.
+- **Un video vive siempre en una etapa de su pipeline**: lo garantiza el trigger
+  `videos_stage_pipeline_check`.
+- **`activity` y `notifications`** se escriben desde triggers, nunca desde el
+  cliente.
 
 ---
 
 ## Roles y permisos
 
-| Rol         | Puede                                                                       |
-| ----------- | --------------------------------------------------------------------------- |
-| `owner`     | Todo, incluido eliminar el equipo                                           |
-| `admin`     | Todo salvo eliminar el equipo                                               |
-| `producer`  | Crear y borrar videos, asignar y mover cualquier tarjeta, gestionar canales |
-| `writer`    | Crear videos y mover su etapa (guion)                                       |
-| `voice`     | Mover su etapa (grabacion / voz en off)                                     |
-| `editor`    | Mover su etapa (edicion)                                                    |
-| `designer`  | Mover su etapa (miniatura)                                                  |
-| `publisher` | Mover programado y publicado                                                |
-| `viewer`    | Solo lectura, sin comentarios                                               |
+Los roles los define cada equipo. Al crearlo se siembran nueve como punto de
+partida —Propietario, Administrador, Productor, Guionista, Locutor, Editor,
+Disenador, Publicador y Observador— y a partir de ahi el propietario renombra,
+crea, borra y reparte permisos y etapas desde **Ajustes → Roles**.
+
+Un rol se compone de dos cosas:
+
+1. **Permisos generales**, como columnas booleanas de `roles`: crear videos,
+   borrarlos, asignar personas, gestionar canales, gestionar pipelines,
+   gestionar el equipo, comentar, mover cualquier etapa.
+2. **Etapas que gestiona** (`role_stages`), que deciden dos cosas a la vez: que
+   tarjetas puede mover y de que entradas recibe aviso.
+
+**Una persona puede llevar varios roles.** Un permiso se concede si _cualquiera_
+de sus roles lo concede; es decir, se suman.
 
 Regla de movimiento (identica en cliente y en base de datos): puedes mover una
-tarjeta si eres productor o superior, **o** si estas asignado a ella, **o** si
-tu rol es responsable de la etapa de origen o de la de destino.
+tarjeta si tu rol permite mover cualquier etapa, **o** si estas asignado a ella,
+**o** si alguno de tus roles gestiona la etapa de origen o la de destino.
 
 La matriz vive dos veces a proposito:
 
 - `public.has_permission()` y `public.can_move_video()` en Postgres — autoridad.
 - `src/lib/domain/roles.ts` en el cliente — solo para la interfaz.
 
-El trigger `videos_guard_stage_change` bloquea cualquier cambio de etapa no
-autorizado, venga de un UPDATE directo o del RPC `move_video`.
+`Propietario` y `Administrador` son roles de sistema: no se editan ni se borran,
+y el equipo nunca puede quedarse sin propietario (lo impide el trigger
+`protect_last_owner`). El trigger `videos_guard_stage_change` bloquea cualquier
+cambio de etapa no autorizado, venga de un UPDATE directo o del RPC
+`move_video`.
 
 ---
 
 ## Tiempo real
 
 - El tablero se suscribe a `videos`, `video_assignees` y `checklist_items` del
-  equipo; la ficha de video a sus `comments`; el feed a `activity`.
+  equipo; la ficha de video a sus `comments`; el feed a `activity`; y la campana
+  de avisos a `notifications` filtrando por `user_id`, asi que cada persona solo
+  recibe los suyos.
+- Los avisos los escriben triggers en la base (`notify_stage_change`,
+  `notify_assignment`, `notify_comment`), no el cliente: entren por la interfaz o
+  por un UPDATE directo, el aviso sale igual. Cuando una tarjeta entra en una
+  etapa se avisa a quien la gestiona por alguno de sus roles (`role_stages`) y a
+  quien la tenga asignada, nunca a quien hizo el cambio.
 - Las tablas llevan `REPLICA IDENTITY FULL`, asi que un UPDATE llega con la fila
   completa y el cliente reconcilia sin volver a consultar.
 - Los eventos que llegan desordenados se descartan comparando `updated_at`
@@ -268,26 +295,33 @@ Las politicas RLS y las reglas del pipeline tambien se prueban de verdad, contra
 un Postgres local efimero (requiere `initdb`, `pg_ctl` y `psql` en el PATH):
 
 ```bash
-npm run db:test     # 29 escenarios de RLS contra un Postgres efimero
+npm run db:test     # 38 escenarios de RLS contra un Postgres efimero
 npm run db:bundle   # regenera supabase/setup.sql desde las migraciones
 ```
 
 El script crea un cluster temporal, aplica `supabase/tests/00_supabase_shim.sql`
 (la parte de Supabase que no esta en las migraciones: esquema `auth`, `auth.uid()`
-y los roles `anon` / `authenticated`), ejecuta las migraciones y recorre 29
-escenarios: quien ve que, quien puede mover cada etapa, invitaciones, intentos de
-auto-promocion, borrados en cascada, enlaces no permitidos e intentos de escribir
-actividad falsa. Los `ERROR` marcados como _debe fallar_ son
-el resultado esperado.
+y los roles `anon` / `authenticated`, y un esquema `storage` de mentira para
+poder probar sus politicas), ejecuta las migraciones y recorre 38 escenarios:
+quien ve que, quien puede mover cada etapa, personas con varios roles, saltos
+entre pipelines distintos, pasos de checklist que solo cierra un rol, subidas al
+cubo equivocado, avisos ajenos, el ultimo propietario, los roles de sistema,
+invitaciones, intentos de auto-promocion, borrados en cascada, enlaces no
+permitidos e intentos de escribir actividad o avisos falsos. Los `ERROR` marcados
+como _debe fallar_ son el resultado esperado.
 
 ---
 
 ## Notas de seguridad
 
-- **La interfaz no decide nada.** Cada regla esta en Postgres: RLS en las once
-  tablas, `has_permission()` para los permisos generales y
+- **La interfaz no decide nada.** Cada regla esta en Postgres: RLS en las
+  dieciocho tablas, `has_permission()` para los permisos generales y
   `videos_guard_stage_change` para los saltos de etapa. El cliente solo replica
   la matriz para pintar botones.
+- **Imagenes.** Los dos cubos son de lectura publica pero de escritura acotada:
+  en `avatars` solo se escribe dentro de la carpeta con tu propio `user_id`, y en
+  `channels` solo si tienes `channel.manage` sobre ese equipo. Ademas van
+  limitados a 2 MB y a tipos de imagen.
 - **Solo se usa la clave `anon`.** La `service_role` no aparece en la
   aplicacion, asi que un despliegue comprometido no da acceso total a los datos.
 - **Enlaces.** Los campos de URL que acaban en un `<a href>` o un `<img src>`

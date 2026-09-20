@@ -1,38 +1,24 @@
 /**
- * Tipos de la base de datos.
+ * Tipos de la base de datos (modelo v2).
  *
- * Se mantienen a mano y alineados con supabase/migrations. Para regenerarlos
- * desde el proyecto real:
+ * Las etapas del tablero y los roles del equipo ya no son enums: son filas que
+ * cada equipo configura. Lo unico que sigue siendo un enum es `stage_kind`,
+ * que no es el nombre de la columna sino lo que significa para el sistema.
+ *
+ * Para regenerarlos desde el proyecto real:
  *   npx supabase gen types typescript --project-id <ref> > src/types/database.ts
  */
 
-export type WorkspaceRole =
-  | "owner"
-  | "admin"
-  | "producer"
-  | "writer"
-  | "voice"
-  | "editor"
-  | "designer"
-  | "publisher"
-  | "viewer";
-
-export type VideoStatus =
-  | "idea"
-  | "script"
-  | "voiceover"
-  | "editing"
-  | "thumbnail"
-  | "review"
-  | "scheduled"
-  | "published"
-  | "archived";
+export type StageKind = "backlog" | "work" | "review" | "scheduled" | "done" | "archived";
 
 export type VideoPriority = "low" | "normal" | "high" | "urgent";
 
 export type AssetKind = "script" | "voiceover" | "footage" | "thumbnail" | "music" | "other";
 
 export type InvitationStatus = "pending" | "accepted" | "revoked";
+
+/** Clave de los roles que el sistema protege y no se pueden borrar. */
+export type SystemRoleKey = "owner" | "admin";
 
 export type Profile = {
   id: string;
@@ -56,7 +42,63 @@ export type Workspace = {
 export type WorkspaceMember = {
   workspace_id: string;
   user_id: string;
-  role: WorkspaceRole;
+  created_at: string;
+};
+
+export type Pipeline = {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string | null;
+  is_default: boolean;
+  position: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Stage = {
+  id: string;
+  pipeline_id: string;
+  name: string;
+  slug: string;
+  color: string;
+  kind: StageKind;
+  position: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Role = {
+  id: string;
+  workspace_id: string;
+  name: string;
+  color: string;
+  key: SystemRoleKey | null;
+  is_system: boolean;
+  position: number;
+  manage_workspace: boolean;
+  manage_members: boolean;
+  manage_channels: boolean;
+  manage_pipelines: boolean;
+  create_videos: boolean;
+  delete_videos: boolean;
+  edit_videos: boolean;
+  assign_videos: boolean;
+  move_any_stage: boolean;
+  write_comments: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RoleStage = {
+  role_id: string;
+  stage_id: string;
+};
+
+export type MemberRole = {
+  workspace_id: string;
+  user_id: string;
+  role_id: string;
   created_at: string;
 };
 
@@ -64,7 +106,7 @@ export type Invitation = {
   id: string;
   workspace_id: string;
   email: string;
-  role: WorkspaceRole;
+  role_id: string;
   token: string;
   status: InvitationStatus;
   invited_by: string;
@@ -76,10 +118,12 @@ export type Invitation = {
 export type Channel = {
   id: string;
   workspace_id: string;
+  pipeline_id: string | null;
   name: string;
   handle: string | null;
   niche: string | null;
   color: string;
+  image_url: string | null;
   youtube_url: string | null;
   target_per_week: number;
   is_archived: boolean;
@@ -91,13 +135,14 @@ export type Channel = {
 export type Video = {
   id: string;
   workspace_id: string;
+  pipeline_id: string;
+  stage_id: string;
   channel_id: string | null;
   ref: string;
   title: string;
   hook: string | null;
   description: string | null;
   script_body: string | null;
-  status: VideoStatus;
   priority: VideoPriority;
   position: number;
   tags: string[];
@@ -121,12 +166,19 @@ export type ChecklistItem = {
   id: string;
   video_id: string;
   title: string;
-  stage: VideoStatus | null;
-  assignee_id: string | null;
+  stage_id: string | null;
+  role_id: string | null;
   is_done: boolean;
   done_at: string | null;
+  completed_by: string | null;
   position: number;
   created_by: string | null;
+  created_at: string;
+};
+
+export type ChecklistAssignee = {
+  item_id: string;
+  user_id: string;
   created_at: string;
 };
 
@@ -159,6 +211,18 @@ export type Activity = {
   created_at: string;
 };
 
+export type Notification = {
+  id: number;
+  workspace_id: string;
+  user_id: string;
+  actor_id: string | null;
+  video_id: string | null;
+  type: string;
+  payload: Record<string, unknown>;
+  read_at: string | null;
+  created_at: string;
+};
+
 export type WorkspaceStats = {
   total: number;
   in_progress: number;
@@ -167,10 +231,11 @@ export type WorkspaceStats = {
   overdue: number;
   members: number;
   channels: number;
-  by_status: Partial<Record<VideoStatus, number>>;
+  pipelines: number;
+  /** Numero de videos por id de etapa. */
+  by_stage: Record<string, number>;
 };
 
-type Row<T> = T;
 type Insert<T, Optional extends keyof T> = Omit<T, Optional> & Partial<Pick<T, Optional>>;
 
 type TableDef<R, I, U = Partial<I>> = {
@@ -180,15 +245,43 @@ type TableDef<R, I, U = Partial<I>> = {
   Relationships: [];
 };
 
+type Timestamps = "created_at" | "updated_at";
+
 export type Database = {
   public: {
     Tables: {
-      profiles: TableDef<Profile, Insert<Profile, "created_at" | "updated_at" | "avatar_url">>;
-      workspaces: TableDef<
-        Workspace,
-        Insert<Workspace, "id" | "created_at" | "updated_at" | "video_counter">
-      >;
+      profiles: TableDef<Profile, Insert<Profile, Timestamps | "avatar_url">>;
+      workspaces: TableDef<Workspace, Insert<Workspace, "id" | Timestamps | "video_counter">>;
       workspace_members: TableDef<WorkspaceMember, Insert<WorkspaceMember, "created_at">>;
+      pipelines: TableDef<
+        Pipeline,
+        Insert<Pipeline, "id" | Timestamps | "description" | "is_default" | "position">
+      >;
+      stages: TableDef<Stage, Insert<Stage, "id" | Timestamps | "color" | "kind" | "position">>;
+      roles: TableDef<
+        Role,
+        Insert<
+          Role,
+          | "id"
+          | Timestamps
+          | "color"
+          | "key"
+          | "is_system"
+          | "position"
+          | "manage_workspace"
+          | "manage_members"
+          | "manage_channels"
+          | "manage_pipelines"
+          | "create_videos"
+          | "delete_videos"
+          | "edit_videos"
+          | "assign_videos"
+          | "move_any_stage"
+          | "write_comments"
+        >
+      >;
+      role_stages: TableDef<RoleStage, RoleStage>;
+      member_roles: TableDef<MemberRole, Insert<MemberRole, "created_at">>;
       invitations: TableDef<
         Invitation,
         Insert<Invitation, "id" | "token" | "status" | "expires_at" | "accepted_at" | "created_at">
@@ -198,15 +291,16 @@ export type Database = {
         Insert<
           Channel,
           | "id"
+          | Timestamps
+          | "pipeline_id"
           | "handle"
           | "niche"
           | "color"
+          | "image_url"
           | "youtube_url"
           | "target_per_week"
           | "is_archived"
           | "created_by"
-          | "created_at"
-          | "updated_at"
         >
       >;
       videos: TableDef<
@@ -214,12 +308,13 @@ export type Database = {
         Insert<
           Video,
           | "id"
+          | Timestamps
           | "ref"
+          | "pipeline_id"
           | "channel_id"
           | "hook"
           | "description"
           | "script_body"
-          | "status"
           | "priority"
           | "position"
           | "tags"
@@ -229,8 +324,6 @@ export type Database = {
           | "youtube_url"
           | "thumbnail_url"
           | "created_by"
-          | "created_at"
-          | "updated_at"
         >
       >;
       video_assignees: TableDef<VideoAssignee, Insert<VideoAssignee, "created_at">>;
@@ -239,58 +332,50 @@ export type Database = {
         Insert<
           ChecklistItem,
           | "id"
-          | "stage"
-          | "assignee_id"
+          | "created_at"
+          | "stage_id"
+          | "role_id"
           | "is_done"
           | "done_at"
+          | "completed_by"
           | "position"
           | "created_by"
-          | "created_at"
         >
       >;
-      comments: TableDef<Comment, Insert<Comment, "id" | "created_at" | "updated_at">>;
+      checklist_assignees: TableDef<ChecklistAssignee, Insert<ChecklistAssignee, "created_at">>;
+      comments: TableDef<Comment, Insert<Comment, "id" | Timestamps>>;
       assets: TableDef<Asset, Insert<Asset, "id" | "kind" | "label" | "created_by" | "created_at">>;
       activity: TableDef<Activity, Insert<Activity, "id" | "payload" | "created_at">>;
+      notifications: TableDef<
+        Notification,
+        Insert<Notification, "id" | "payload" | "read_at" | "created_at" | "actor_id" | "video_id">
+      >;
     };
     Views: Record<string, never>;
     Functions: {
-      create_workspace: {
-        Args: { p_name: string; p_slug: string };
-        Returns: Row<Workspace>;
-      };
-      seed_demo_workspace: {
-        Args: Record<string, never>;
-        Returns: Row<Workspace>;
-      };
+      create_workspace: { Args: { p_name: string; p_slug: string }; Returns: Workspace };
+      seed_demo_workspace: { Args: Record<string, never>; Returns: Workspace };
+      seed_workspace_defaults: { Args: { p_workspace: string }; Returns: string };
       move_video: {
-        Args: { p_video: string; p_status: VideoStatus; p_position: number };
-        Returns: Row<Video>;
+        Args: { p_video: string; p_stage: string; p_position: number };
+        Returns: Video;
       };
-      accept_invitation: {
-        Args: { p_token: string };
-        Returns: Row<Workspace>;
-      };
+      accept_invitation: { Args: { p_token: string }; Returns: Workspace };
       invitation_preview: {
         Args: { p_token: string };
         Returns: {
           workspace_name: string;
-          role: WorkspaceRole;
+          role_name: string;
           email: string;
           expires_at: string;
         }[];
       };
-      workspace_stats: {
-        Args: { p_workspace: string };
-        Returns: WorkspaceStats;
-      };
-      has_permission: {
-        Args: { p_workspace: string; p_permission: string };
-        Returns: boolean;
-      };
+      workspace_stats: { Args: { p_workspace: string }; Returns: WorkspaceStats };
+      has_permission: { Args: { p_workspace: string; p_permission: string }; Returns: boolean };
+      is_owner: { Args: { p_workspace: string }; Returns: boolean };
     };
     Enums: {
-      workspace_role: WorkspaceRole;
-      video_status: VideoStatus;
+      stage_kind: StageKind;
       video_priority: VideoPriority;
       asset_kind: AssetKind;
       invitation_status: InvitationStatus;

@@ -7,12 +7,11 @@ import { useWorkspace } from "@/components/providers/workspace-provider";
 import { Badge, Dot } from "@/components/ui/badge";
 import { Card, EmptyState } from "@/components/ui/misc";
 import { dueLabel, isOverdue } from "@/lib/dates";
-import { stageMeta } from "@/lib/domain/pipeline";
 import { cn } from "@/lib/utils";
 import type { BoardVideo } from "@/server/queries";
 
 export function MyWork({ videos }: { videos: BoardVideo[] }) {
-  const { channelById } = useWorkspace();
+  const { channelById, stageById } = useWorkspace();
 
   return (
     <Card className="p-4">
@@ -37,7 +36,7 @@ export function MyWork({ videos }: { videos: BoardVideo[] }) {
         <ul className="divide-line divide-y">
           {videos.map((video) => {
             const channel = channelById(video.channel_id);
-            const stage = stageMeta(video.status);
+            const stage = stageById(video.stage_id);
             const due = dueLabel(video.due_date);
             const late = isOverdue(video.due_date);
 
@@ -57,9 +56,14 @@ export function MyWork({ videos }: { videos: BoardVideo[] }) {
                     </span>
                   </span>
 
-                  <Badge className="bg-column text-ink-600 hidden sm:inline-flex" dot={stage.dot}>
-                    {stage.label}
-                  </Badge>
+                  {stage ? (
+                    <Badge
+                      className="bg-column text-ink-600 hidden sm:inline-flex"
+                      dotColor={stage.color}
+                    >
+                      {stage.name}
+                    </Badge>
+                  ) : null}
 
                   {due ? (
                     <span
