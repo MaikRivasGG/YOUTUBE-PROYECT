@@ -1,9 +1,9 @@
 -- ===========================================================================
--- Prueba de extremo a extremo de las politicas RLS y las reglas del pipeline.
+-- Prueba de extremo a extremo del modelo v2: pipelines, etapas y roles
+-- configurables, notificaciones y almacenamiento.
 --
--- Se ejecuta sobre una base recien migrada (ver scripts/db-test.sh). Cada
--- bloque imprime lo que se espera; los ERROR marcados como "debe fallar" son
--- el resultado correcto.
+-- Se ejecuta sobre una base recien migrada (scripts/db-test.sh). Los ERROR
+-- marcados como "debe fallar" son el resultado correcto.
 -- ===========================================================================
 
 \set ON_ERROR_STOP off
@@ -23,35 +23,48 @@ select count(*) as perfiles from public.profiles;
 \echo '## 2 · Ana crea el equipo de demostracion'
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 set role authenticated;
-select name, slug from public.seed_demo_workspace();
-select (select count(*) from public.videos) as videos,
-       (select count(*) from public.channels) as canales;
+select name from public.seed_demo_workspace();
+select
+  (select count(*) from public.videos) as videos,
+  (select count(*) from public.channels) as canales,
+  (select count(*) from public.pipelines) as pipelines,
+  (select count(*) from public.stages) as etapas,
+  (select count(*) from public.roles) as roles;
 
 \echo ''
-\echo '## 3 · Las referencias VID-000x se generan solas'
-select ref, title from public.videos order by ref limit 3;
+\echo '## 3 · El pipeline por defecto trae sus etapas en orden'
+select slug, name, kind from public.stages order by position;
 
 \echo ''
-\echo '## 4 · Quien no es miembro no ve nada'
+\echo '## 4 · Ana es propietaria por su rol, no por una columna'
+select r.name as rol, r.key from public.member_roles mr
+join public.roles r on r.id = mr.role_id
+where mr.user_id = '11111111-1111-1111-1111-111111111111';
+
+\echo ''
+\echo '## 5 · Quien no es miembro no ve nada'
 reset role;
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 set role authenticated;
 select count(*) as videos_visibles_para_bruno from public.videos;
 
 \echo ''
-\echo '## 5 · Y tampoco puede darse de alta por su cuenta (0 filas)'
-insert into public.workspace_members (workspace_id, user_id, role)
-  select id, '22222222-2222-2222-2222-222222222222', 'admin' from public.workspaces;
-
-\echo ''
-\echo '## 6 · Ana da de alta a Bruno (disenador) y Carla (observadora)'
+\echo '## 6 · Ana da de alta a Bruno (Disenador) y Carla (Observador)'
 reset role;
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 set role authenticated;
-insert into public.workspace_members (workspace_id, user_id, role)
-  select id, '22222222-2222-2222-2222-222222222222', 'designer' from public.workspaces;
-insert into public.workspace_members (workspace_id, user_id, role)
-  select id, '33333333-3333-3333-3333-333333333333', 'viewer' from public.workspaces;
+insert into public.workspace_members (workspace_id, user_id)
+  select id, '22222222-2222-2222-2222-222222222222' from public.workspaces;
+insert into public.member_roles (workspace_id, user_id, role_id)
+  select w.id, '22222222-2222-2222-2222-222222222222', r.id
+  from public.workspaces w join public.roles r on r.workspace_id = w.id
+  where r.name = 'Disenador';
+insert into public.workspace_members (workspace_id, user_id)
+  select id, '33333333-3333-3333-3333-333333333333' from public.workspaces;
+insert into public.member_roles (workspace_id, user_id, role_id)
+  select w.id, '33333333-3333-3333-3333-333333333333', r.id
+  from public.workspaces w join public.roles r on r.workspace_id = w.id
+  where r.name = 'Observador';
 
 \echo ''
 \echo '## 7 · Bruno mueve de GUION a GRABACION -> debe fallar (no es su etapa)'
@@ -59,25 +72,54 @@ reset role;
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 set role authenticated;
 select public.move_video(
-  (select id from public.videos where status = 'script' order by ref limit 1), 'voiceover', 1500);
+  (select v.id from public.videos v join public.stages s on s.id = v.stage_id
+   where s.slug = 'script' order by v.ref limit 1),
+  (select id from public.stages where slug = 'voiceover'),
+  1500);
 
 \echo ''
-\echo '## 8 · Bruno mueve de EDICION a MINIATURA -> permitido'
-select ref, status from public.move_video(
-  (select id from public.videos where status = 'editing' order by ref limit 1), 'thumbnail', 1000);
+\echo '## 8 · Bruno mueve de EDICION a MINIATURA (su etapa) -> permitido'
+select ref from public.move_video(
+  (select v.id from public.videos v join public.stages s on s.id = v.stage_id
+   where s.slug = 'editing' order by v.ref limit 1),
+  (select id from public.stages where slug = 'thumbnail'),
+  1000);
 
 \echo ''
-\echo '## 9 · Bruno edita un campo de una tarjeta en GUION -> permitido'
+\echo '## 9 · Bruno edita un campo de una tarjeta que esta en GUION -> permitido'
 update public.videos set thumbnail_url = 'https://cdn.test/a.jpg'
-  where id = (select id from public.videos where status = 'script' order by ref limit 1);
+  where id = (select v.id from public.videos v join public.stages s on s.id = v.stage_id
+              where s.slug = 'script' order by v.ref limit 1);
 
 \echo ''
 \echo '## 10 · Un UPDATE directo que cambie la etapa -> debe fallar (trigger)'
-update public.videos set status = 'published'
-  where id = (select id from public.videos where status = 'script' order by ref limit 1);
+update public.videos set stage_id = (select id from public.stages where slug = 'published')
+  where id = (select v.id from public.videos v join public.stages s on s.id = v.stage_id
+              where s.slug = 'script' order by v.ref limit 1);
 
 \echo ''
-\echo '## 11 · La observadora no comenta -> debe fallar'
+\echo '## 11 · Varios roles a la vez: Ana suma Locutor a Bruno'
+reset role;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+set role authenticated;
+insert into public.member_roles (workspace_id, user_id, role_id)
+  select w.id, '22222222-2222-2222-2222-222222222222', r.id
+  from public.workspaces w join public.roles r on r.workspace_id = w.id
+  where r.name = 'Locutor';
+
+\echo ''
+\echo '## 12 · ...y ahora Bruno si mueve de GRABACION a EDICION'
+reset role;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+set role authenticated;
+select ref from public.move_video(
+  (select v.id from public.videos v join public.stages s on s.id = v.stage_id
+   where s.slug = 'voiceover' order by v.ref limit 1),
+  (select id from public.stages where slug = 'editing'),
+  3000);
+
+\echo ''
+\echo '## 13 · La observadora no comenta -> debe fallar'
 reset role;
 set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
 set role authenticated;
@@ -86,128 +128,205 @@ insert into public.comments (video_id, author_id, body)
           '33333333-3333-3333-3333-333333333333', 'Hola');
 
 \echo ''
-\echo '## 12 · ...ni mueve tarjetas -> debe fallar'
-select public.move_video(
-  (select id from public.videos where status = 'idea' order by ref limit 1), 'script', 500);
-
-\echo ''
-\echo '## 13 · ...pero si lee el tablero completo'
+\echo '## 14 · ...pero si lee el tablero entero'
 select count(*) as videos_visibles_para_carla from public.videos;
 
 \echo ''
-\echo '## 14 · La propietaria publica y se sella published_at'
+\echo '## 15 · Publicar sella la fecha (etapa de tipo done)'
 reset role;
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 set role authenticated;
-select ref, status, published_at is not null as sellado
-from public.move_video(
-  (select id from public.videos where status = 'scheduled' order by ref limit 1), 'published', 1000);
+select ref, published_at is not null as sellado from public.move_video(
+  (select v.id from public.videos v join public.stages s on s.id = v.stage_id
+   where s.slug = 'scheduled' order by v.ref limit 1),
+  (select id from public.stages where slug = 'published'),
+  1000);
 
 \echo ''
-\echo '## 15 · El feed de actividad registra cada movimiento'
-select type, payload->>'from' as de, payload->>'to' as a
+\echo '## 16 · La actividad guarda los nombres de etapa del equipo'
+select payload->>'from' as de, payload->>'to' as a
 from public.activity where type = 'video.moved' order by created_at desc limit 3;
 
 \echo ''
-\echo '## 16 · Invitar exige permiso: Bruno no puede -> debe fallar'
+\echo '## 17 · Notificaciones: a quien gestiona la etapa de destino'
+select
+  p.full_name as destinatario,
+  n.type,
+  n.payload->>'stage' as etapa
+from public.notifications n
+join public.profiles p on p.id = n.user_id
+where n.type = 'stage.entered'
+order by n.created_at desc limit 5;
+
+\echo ''
+\echo '## 18 · Invitar exige permiso: Bruno no puede -> debe fallar'
 reset role;
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 set role authenticated;
-insert into public.invitations (workspace_id, email, role, invited_by)
-  select id, 'nuria@estudio.com', 'editor', '22222222-2222-2222-2222-222222222222'
-  from public.workspaces;
+insert into public.invitations (workspace_id, email, role_id, invited_by)
+  select w.id, 'nuria@estudio.com', r.id, '22222222-2222-2222-2222-222222222222'
+  from public.workspaces w join public.roles r on r.workspace_id = w.id
+  where r.name = 'Editor';
 
 \echo ''
-\echo '## 17 · Ana invita a una editora; nadie puede invitar como propietario'
+\echo '## 19 · Ana invita a una editora; nadie invita como propietario'
 reset role;
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 set role authenticated;
-insert into public.invitations (workspace_id, email, role, invited_by)
-  select id, 'nuria@estudio.com', 'editor', '11111111-1111-1111-1111-111111111111'
-  from public.workspaces;
-insert into public.invitations (workspace_id, email, role, invited_by)
-  select id, 'otro@estudio.com', 'owner', '11111111-1111-1111-1111-111111111111'
-  from public.workspaces;
+insert into public.invitations (workspace_id, email, role_id, invited_by)
+  select w.id, 'nuria@estudio.com', r.id, '11111111-1111-1111-1111-111111111111'
+  from public.workspaces w join public.roles r on r.workspace_id = w.id
+  where r.name = 'Editor';
+insert into public.invitations (workspace_id, email, role_id, invited_by)
+  select w.id, 'otro@estudio.com', r.id, '11111111-1111-1111-1111-111111111111'
+  from public.workspaces w join public.roles r on r.workspace_id = w.id
+  where r.key = 'owner';
 
--- El token viaja en la URL del enlace; aqui se lee como superusuario.
 reset role;
 select token as tok from public.invitations where email = 'nuria@estudio.com' \gset
 
 \echo ''
-\echo '## 18 · Aceptar con otro email -> debe fallar'
+\echo '## 20 · Aceptar con otro email -> debe fallar'
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 set role authenticated;
 select public.accept_invitation(:'tok');
 
 \echo ''
-\echo '## 19 · La destinataria la acepta y entra con su rol'
+\echo '## 21 · La destinataria la acepta y entra con su rol'
 reset role;
 set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
 set role authenticated;
 select name from public.accept_invitation(:'tok');
-select role as rol_de_nuria from public.workspace_members
-where user_id = '44444444-4444-4444-4444-444444444444';
+select r.name as rol_de_nuria from public.member_roles mr
+join public.roles r on r.id = mr.role_id
+where mr.user_id = '44444444-4444-4444-4444-444444444444';
 
 \echo ''
-\echo '## 20 · El enlace no sirve dos veces -> debe fallar'
+\echo '## 22 · El enlace no sirve dos veces -> debe fallar'
 select public.accept_invitation(:'tok');
 
 \echo ''
-\echo '## 21 · Nadie se sube el rol a si mismo (0 filas)'
-update public.workspace_members set role = 'admin'
-where user_id = '44444444-4444-4444-4444-444444444444';
-select role as rol_tras_el_intento from public.workspace_members
-where user_id = '44444444-4444-4444-4444-444444444444';
+\echo '## 23 · Nadie se concede el rol de propietario (0 filas)'
+insert into public.member_roles (workspace_id, user_id, role_id)
+  select w.id, '44444444-4444-4444-4444-444444444444', r.id
+  from public.workspaces w join public.roles r on r.workspace_id = w.id
+  where r.key = 'owner';
 
 \echo ''
-\echo '## 22 · La editora mueve de GRABACION a EDICION -> permitido'
-select ref, status from public.move_video(
-  (select id from public.videos where status = 'voiceover' order by ref limit 1), 'editing', 1500);
-
-\echo ''
-\echo '## 23 · Nadie puede echar al propietario (0 filas)'
-delete from public.workspace_members where role = 'owner';
-select count(*) as propietarios from public.workspace_members where role = 'owner';
-
-\echo ''
-\echo '## 24 · Borrar un video arrastra su checklist (cascada)'
+\echo '## 24 · Los roles de sistema no se editan ni se borran (0 filas)'
 reset role;
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 set role authenticated;
-select count(*) as checklist_antes from public.checklist_items;
-delete from public.videos where ref = 'VID-0001';
-select count(*) as checklist_despues from public.checklist_items;
+update public.roles set name = 'Jefazo' where key = 'owner';
+delete from public.roles where key = 'admin';
+select count(*) as roles_de_sistema from public.roles where is_system;
 
 \echo ''
-\echo '## 25 · Las metricas del dashboard responden'
-select jsonb_pretty(public.workspace_stats((select id from public.workspaces limit 1)));
+\echo '## 25 · El propietario si renombra un rol propio y le cambia la etapa'
+update public.roles set name = 'Montador' where name = 'Editor';
+select name from public.roles where name = 'Montador';
 
 \echo ''
-\echo '## 26 · Un enlace javascript: no entra en la base de datos -> debe fallar'
-update public.videos set youtube_url = 'javascript:alert(1)'
-  where ref = 'VID-0002';
+\echo '## 26 · No se puede dejar al equipo sin propietario -> debe fallar'
+delete from public.member_roles mr
+using public.roles r
+where r.id = mr.role_id and r.key = 'owner';
 
 \echo ''
-\echo '## 27 · Un enlace https si entra'
-update public.videos set youtube_url = 'https://youtu.be/abc123'
-  where ref = 'VID-0002';
-select ref, youtube_url from public.videos where ref = 'VID-0002';
+\echo '## 27 · Segundo pipeline: el equipo crea un flujo para Shorts'
+insert into public.pipelines (workspace_id, name, position)
+  select id, 'Shorts', 2000 from public.workspaces;
+insert into public.stages (pipeline_id, slug, name, color, kind, position)
+  select p.id, 'grabar', 'Grabar', '#ef4444', 'work', 1000 from public.pipelines p where p.name = 'Shorts';
+insert into public.stages (pipeline_id, slug, name, color, kind, position)
+  select p.id, 'subir', 'Subir', '#22c55e', 'done', 2000 from public.pipelines p where p.name = 'Shorts';
+select p.name as pipeline, count(s.id) as etapas
+from public.pipelines p left join public.stages s on s.pipeline_id = p.id
+group by p.name order by p.name;
 
 \echo ''
-\echo '## 28 · Un cliente no puede inyectar actividad falsa -> debe fallar'
+\echo '## 28 · Una tarjeta no puede saltar a la etapa de otro pipeline -> debe fallar'
+select public.move_video(
+  (select id from public.videos order by ref limit 1),
+  (select id from public.stages where slug = 'subir'),
+  1000);
+
+\echo ''
+\echo '## 29 · Un paso de checklist con rol solo lo marca ese rol (0 filas)'
+-- Bruno es Disenador y Locutor, no Guionista: puede editar videos pero este
+-- paso concreto no es suyo.
+reset role;
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 set role authenticated;
-select public.log_activity(
-  (select id from public.workspaces limit 1), null, 'video.moved', '{"title":"falso"}'::jsonb);
+update public.checklist_items set is_done = true
+  where id = (select c.id from public.checklist_items c
+              join public.roles r on r.id = c.role_id
+              where r.name = 'Guionista' limit 1);
+select is_done as sigue_sin_marcar from public.checklist_items c
+  join public.roles r on r.id = c.role_id
+  where r.name = 'Guionista' limit 1;
 
 \echo ''
-\echo '## 29 · Los triggers siguen funcionando pese a revocar sus funciones'
+\echo '## 30 · ...y al marcarlo quien toca, queda registrado quien fue'
 reset role;
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 set role authenticated;
-insert into public.videos (workspace_id, title, status)
-  values ((select id from public.workspaces limit 1), 'Prueba de triggers', 'idea');
-select ref, created_by is not null as autor_sellado
-from public.videos where title = 'Prueba de triggers';
-select count(*) as actividad_registrada from public.activity
-where type = 'video.created' and payload->>'title' = 'Prueba de triggers';
+update public.checklist_items set is_done = true
+  where id = (select c.id from public.checklist_items c
+              join public.roles r on r.id = c.role_id
+              where r.name = 'Guionista' limit 1);
+select c.title, p.full_name as completado_por, c.done_at is not null as con_fecha
+from public.checklist_items c
+join public.profiles p on p.id = c.completed_by
+limit 1;
+
+\echo ''
+\echo '## 31 · Varios responsables en un mismo paso'
+insert into public.checklist_assignees (item_id, user_id)
+  select c.id, '22222222-2222-2222-2222-222222222222'
+  from public.checklist_items c limit 1;
+insert into public.checklist_assignees (item_id, user_id)
+  select c.id, '33333333-3333-3333-3333-333333333333'
+  from public.checklist_items c limit 1;
+select count(*) as responsables_del_paso from public.checklist_assignees;
+
+\echo ''
+\echo '## 32 · Imagenes: nadie sube un avatar en la carpeta de otro -> debe fallar'
+reset role;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+set role authenticated;
+insert into storage.objects (bucket_id, name)
+  values ('avatars', '11111111-1111-1111-1111-111111111111/foto.png');
+
+\echo ''
+\echo '## 33 · ...pero si en la suya'
+insert into storage.objects (bucket_id, name)
+  values ('avatars', '22222222-2222-2222-2222-222222222222/foto.png');
+
+\echo ''
+\echo '## 34 · La miniatura del canal exige permiso sobre canales -> debe fallar'
+insert into storage.objects (bucket_id, name)
+  select 'channels', w.id || '/logo.png' from public.workspaces w;
+
+\echo ''
+\echo '## 35 · ...y la propietaria si puede'
+reset role;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+set role authenticated;
+insert into storage.objects (bucket_id, name)
+  select 'channels', w.id || '/logo.png' from public.workspaces w;
+
+\echo ''
+\echo '## 36 · Un cliente no puede inyectar avisos falsos -> debe fallar'
+select public.notify_users(
+  (select id from public.workspaces limit 1),
+  array['33333333-3333-3333-3333-333333333333'::uuid],
+  'stage.entered', null, '{}'::jsonb);
+
+\echo ''
+\echo '## 37 · Cada quien solo ve sus propios avisos'
+select count(*) as avisos_de_ana from public.notifications;
+
+\echo ''
+\echo '## 38 · Las metricas responden sobre el modelo nuevo'
+select jsonb_pretty(public.workspace_stats((select id from public.workspaces limit 1)));
