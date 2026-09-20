@@ -126,7 +126,7 @@ NEXT_PUBLIC_SITE_URL="http://localhost:3000"
 
 Opcion A — **un solo copia y pega** (lo mas rapido): abre
 **SQL Editor → New query**, pega entero el fichero [`supabase/setup.sql`](supabase/setup.sql)
-y pulsa _Run_. Deja las 18 tablas, las 52 politicas RLS, las 32 funciones y los
+y pulsa _Run_. Deja las 18 tablas, las 61 politicas RLS, las 32 funciones y los
 dos cubos de imagenes (`avatars` y `channels`, con sus 8 politicas de Storage)
 listos de una vez.
 
