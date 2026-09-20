@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+/* ==========================================================================
+   Design tokens - Framehouse
+   Derivados del prototipo: lateral oscuro, lienzo claro y acento naranja.
+   ========================================================================== */
+@theme {
+  --color-canvas: #f5f6f8;
+  --color-surface: #ffffff;
+  --color-column: #f0f1f4;
+  --color-line: #e7e9ee;
+
+  --color-ink-900: #0f1116;
+  --color-ink-700: #303441;
+  --color-ink-500: #6b7280;
+  --color-ink-400: #9aa1ae;
+
+  --color-sidebar: #14161c;
+  --color-sidebar-soft: #1d2029;
+  --color-sidebar-line: #262a34;
+  --color-sidebar-text: #9ba2b0;
+
+  --color-brand-50: #fff2ed;
+  --color-brand-100: #ffe1d6;
+  --color-brand-500: #f04e23;
+  --color-brand-600: #dc3f16;
+  --color-brand-700: #b73312;
+
+  --radius-card: 0.75rem;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-line);
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink-900);
+    font-family: var(--font-sans);
+  }
+
+  ::selection {
+    background-color: var(--color-brand-100);
+    color: var(--color-brand-700);
+  }
+
+  /* Anillo de foco unico y visible en toda la aplicacion. */
+  :focus-visible {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  .scrollbar-slim {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd0d9 transparent;
+  }
+
+  .scrollbar-slim::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-slim::-webkit-scrollbar-thumb {
+    background-color: #cbd0d9;
+    border-radius: 9999px;
+  }
+
+  .card-shadow {
+    box-shadow:
+      0 1px 2px rgb(16 18 22 / 0.06),
+      0 1px 3px rgb(16 18 22 / 0.04);
+  }
+
+  .card-shadow-lg {
+    box-shadow:
+      0 10px 30px -12px rgb(16 18 22 / 0.18),
+      0 2px 8px -2px rgb(16 18 22 / 0.08);
+  }
+
+  /* Respeta a quien pide menos animacion. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

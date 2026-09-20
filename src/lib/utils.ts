@@ -1,0 +1,72 @@
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+/** Iniciales para los avatares (máximo dos letras). */
+export function initials(name: string | null | undefined, fallback = "?"): string {
+  const clean = (name ?? "").trim();
+  if (!clean) return fallback;
+  const parts = clean.split(/\s+/).slice(0, 2);
+  return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || fallback;
+}
+
+const AVATAR_COLORS = [
+  "bg-blue-500",
+  "bg-violet-500",
+  "bg-emerald-500",
+  "bg-amber-500",
+  "bg-rose-500",
+  "bg-cyan-600",
+  "bg-fuchsia-500",
+  "bg-indigo-500",
+];
+
+/** Color estable por usuario, para que el avatar no cambie entre renders. */
+export function avatarColor(seed: string): string {
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) | 0;
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+export function slugify(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+}
+
+/** Convierte un error desconocido en un mensaje legible en espanol. */
+export function errorMessage(error: unknown, fallback = "Algo ha salido mal"): string {
+  if (typeof error === "string") return error;
+  if (error && typeof error === "object" && "message" in error) {
+    const message = String((error as { message: unknown }).message);
+    return translateError(message) ?? message;
+  }
+  return fallback;
+}
+
+const ERROR_DICTIONARY: Record<string, string> = {
+  "Invalid login credentials": "Email o contraseña incorrectos",
+  "Email not confirmed": "Confirma tu email antes de entrar",
+  "User already registered": "Ese email ya tiene cuenta",
+  FORBIDDEN_STAGE_MOVE: "Tu rol no puede mover esta tarjeta a esa etapa",
+  INVITATION_NOT_FOUND: "La invitación no existe o ya fue usada",
+  INVITATION_EXPIRED: "La invitación ha caducado",
+  INVITATION_EMAIL_MISMATCH: "Esta invitación es para otro email",
+  AUTH_REQUIRED: "Necesitas iniciar sesión",
+};
+
+function translateError(message: string): string | null {
+  for (const [key, value] of Object.entries(ERROR_DICTIONARY)) {
+    if (message.includes(key)) return value;
+  }
+  return null;
+}
