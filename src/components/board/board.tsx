@@ -18,6 +18,7 @@ import { toast } from "sonner";
 
 import { BoardColumn } from "@/components/board/column";
 import { BoardFiltersBar } from "@/components/board/board-filters";
+import { BoardScope } from "@/components/board/board-scope";
 import { VideoCard } from "@/components/board/video-card";
 import { useWorkspace } from "@/components/providers/workspace-provider";
 import { useRealtimeBoard } from "@/hooks/use-realtime-board";
@@ -156,8 +157,15 @@ export function Board({
     }
   }
 
+  const pipeline = pipelines.find((item) => item.id === pipelineId);
+  const channel = workspace.channelById(filters.channelId);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {/* Etiqueta fija: canal y pipeline no son lo mismo y aqui se ven los dos
+          a la vez, para no confundir "que veo" con "por que flujo va". */}
+      <BoardScope pipelineName={pipeline?.name ?? null} channel={channel ?? null} />
+
       <BoardFiltersBar
         filters={filters}
         onChange={setFilters}
