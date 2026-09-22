@@ -4,7 +4,6 @@ import { supabaseServer } from "@/lib/supabase/server";
 import type {
   Activity,
   Channel,
-  ChannelTemplateItem,
   Invitation,
   Notification,
   Pipeline,
@@ -237,13 +236,19 @@ export interface VideoDetail extends Video {
   checklist_items: {
     id: string;
     title: string;
-    stage_id: string | null;
     role_id: string | null;
     is_done: boolean;
     done_at: string | null;
     completed_by: string | null;
     position: number;
     checklist_assignees: { user_id: string }[];
+  }[];
+  /** Los enlaces entregados por etapa: el checklist "de verdad", el que bloquea avanzar. */
+  video_stage_links: {
+    stage_id: string;
+    url: string;
+    completed_by: string | null;
+    completed_at: string;
   }[];
   comments: {
     id: string;
@@ -260,7 +265,7 @@ export async function getVideoDetail(id: string): Promise<VideoDetail | null> {
   const { data, error } = await supabase
     .from("videos")
     .select(
-      "*, video_assignees(user_id), checklist_items(id, title, stage_id, role_id, is_done, done_at, completed_by, position, checklist_assignees(user_id)), comments(id, body, author_id, mentions, created_at), assets(id, kind, label, url, created_at)",
+      "*, video_assignees(user_id), checklist_items(id, title, role_id, is_done, done_at, completed_by, position, checklist_assignees(user_id)), video_stage_links(stage_id, url, completed_by, completed_at), comments(id, body, author_id, mentions, created_at), assets(id, kind, label, url, created_at)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -307,44 +312,6 @@ export async function getAnalyticsVideos(workspaceId: string): Promise<Analytics
 
   if (error) return [];
   return (data ?? []) as unknown as AnalyticsVideo[];
-}
-
-/** Pasos de la plantilla de produccion de un canal. */
-export async function getChannelTemplate(channelId: string): Promise<ChannelTemplateItem[]> {
-  const supabase = await supabaseServer();
-  const { data, error } = await supabase
-    .from("channel_template_items")
-    .select("*")
-    .eq("channel_id", channelId)
-    .order("position", { ascending: true });
-
-  if (error) return [];
-  return data ?? [];
-}
-
-/** Todas las plantillas del equipo, agrupadas por canal. */
-export async function getWorkspaceTemplates(
-  channelIds: string[],
-): Promise<Map<string, ChannelTemplateItem[]>> {
-  const grouped = new Map<string, ChannelTemplateItem[]>();
-  if (channelIds.length === 0) return grouped;
-
-  const supabase = await supabaseServer();
-  const { data, error } = await supabase
-    .from("channel_template_items")
-    .select("*")
-    .in("channel_id", channelIds)
-    .order("position", { ascending: true });
-
-  if (error) return grouped;
-
-  for (const item of data ?? []) {
-    const list = grouped.get(item.channel_id) ?? [];
-    list.push(item);
-    grouped.set(item.channel_id, list);
-  }
-
-  return grouped;
 }
 
 export interface StageDuration {

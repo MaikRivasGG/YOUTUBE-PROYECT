@@ -336,67 +336,29 @@ select jsonb_pretty(public.workspace_stats((select id from public.workspaces lim
 -- ===========================================================================
 
 \echo ''
-\echo '## 39 · La propietaria describe el proceso del canal una sola vez'
+\echo '## 39 · La propietaria pone el enlace que exige la etapa de Guion'
 reset role;
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 set role authenticated;
-insert into public.channel_template_items (channel_id, title, stage_id, role_id, position)
-select
-  c.id,
-  t.title,
-  (select s.id from public.stages s
-    where s.pipeline_id = c.pipeline_id and s.slug = t.slug),
-  (select r.id from public.roles r
-    where r.workspace_id = c.workspace_id and r.name = t.rol),
-  t.pos
-from public.channels c,
-  (values
-    ('Escribir el guion',   'script',    'Guionista', 1000.0),
-    ('Grabar la voz',       'voiceover', 'Locutor',   2000.0),
-    ('Montar el video',     'editing',   'Editor',    3000.0),
-    ('Disenar la miniatura','thumbnail', 'Disenador', 4000.0)
-  ) as t(title, slug, rol, pos)
-where c.id = (select id from public.channels order by created_at limit 1);
-select count(*) as pasos_de_plantilla from public.channel_template_items;
+update public.stages set deliverable_label = 'Enlace del guion'
+where slug = 'script' and pipeline_id = (select id from public.pipelines where is_default limit 1);
+select name, deliverable_label from public.stages
+where slug = 'script' and pipeline_id = (select id from public.pipelines where is_default limit 1);
 
 \echo ''
-\echo '## 40 · Una tarjeta nueva del canal nace con el checklist puesto'
+\echo '## 40 · Una tarjeta nueva del canal, sin checklist que copiar de ningun lado'
 insert into public.videos (workspace_id, channel_id, pipeline_id, stage_id, ref, title, created_by)
 select
   c.workspace_id, c.id, c.pipeline_id,
   (select s.id from public.stages s where s.pipeline_id = c.pipeline_id and s.slug = 'idea'),
   'TPL-001', 'Video con plantilla', '11111111-1111-1111-1111-111111111111'
 from public.channels c
-where c.id = (select channel_id from public.channel_template_items limit 1);
-
-select c.title, s.slug as etapa, r.name as rol
-from public.checklist_items c
-left join public.stages s on s.id = c.stage_id
-left join public.roles r on r.id = c.role_id
-where c.video_id = (select id from public.videos where title = 'Video con plantilla')
-order by c.position;
-
-\echo ''
-\echo '## 41 · Un rol de linea ya no reestructura el checklist ajeno -> debe fallar'
-reset role;
-set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
-set role authenticated;
-insert into public.checklist_items (video_id, title)
-select id, 'Paso colado' from public.videos where title = 'Video con plantilla';
-
-\echo ''
-\echo '## 42 · ...pero si puede marcar el paso de su rol'
-select count(*) as pasos_visibles from public.checklist_items
+where c.id = (select id from public.channels order by created_at limit 1);
+select count(*) as pasos_libres_al_nacer from public.checklist_items
 where video_id = (select id from public.videos where title = 'Video con plantilla');
 
 \echo ''
-\echo '## 43 · La etapa de Guion exige guion antes de avanzar -> debe fallar'
-reset role;
-set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
-set role authenticated;
-update public.stages set required_fields = '{script_body}'
-where slug = 'script' and pipeline_id = (select pipeline_id from public.videos where title = 'Video con plantilla');
-
+\echo '## 41 · La etapa de Guion exige su enlace antes de avanzar -> debe fallar'
 update public.videos
 set stage_id = (select s.id from public.stages s
   where s.pipeline_id = videos.pipeline_id and s.slug = 'script')
@@ -408,15 +370,27 @@ set stage_id = (select s.id from public.stages s
 where title = 'Video con plantilla';
 
 \echo ''
-\echo '## 44 · Que le falta exactamente'
+\echo '## 42 · Que le falta exactamente'
 select public.stage_exit_blockers(
   (select id from public.videos where title = 'Video con plantilla'),
   (select stage_id from public.videos where title = 'Video con plantilla')
 ) as le_falta;
 
 \echo ''
-\echo '## 45 · Con el guion escrito, la tarjeta pasa'
-update public.videos set script_body = 'Hook, desarrollo y cierre.' where title = 'Video con plantilla';
+\echo '## 43 · Guardar el enlace lo registra la base, no quien lo manda'
+insert into public.video_stage_links (video_id, stage_id, url)
+select
+  (select id from public.videos where title = 'Video con plantilla'),
+  (select s.id from public.stages s
+    where s.pipeline_id = (select pipeline_id from public.videos where title = 'Video con plantilla')
+    and s.slug = 'script'),
+  'https://docs.example.com/guion-lobos';
+select stage_id is not null as tiene_etapa, completed_by = '11111111-1111-1111-1111-111111111111' as lo_puso_ana
+from public.video_stage_links
+where video_id = (select id from public.videos where title = 'Video con plantilla');
+
+\echo ''
+\echo '## 44 · Con el enlace guardado, la tarjeta pasa'
 update public.videos
 set stage_id = (select s.id from public.stages s
   where s.pipeline_id = videos.pipeline_id and s.slug = 'voiceover')
@@ -425,7 +399,7 @@ select s.slug as etapa_actual from public.videos v
 join public.stages s on s.id = v.stage_id where v.title = 'Video con plantilla';
 
 \echo ''
-\echo '## 46 · Retroceder nunca se bloquea, aunque falten requisitos'
+\echo '## 45 · Retroceder nunca se bloquea, aunque falten requisitos'
 update public.stages set required_fields = '{youtube_url}'
 where slug = 'voiceover' and pipeline_id = (select pipeline_id from public.videos where title = 'Video con plantilla');
 update public.videos
@@ -436,22 +410,79 @@ select s.slug as etapa_actual from public.videos v
 join public.stages s on s.id = v.stage_id where v.title = 'Video con plantilla';
 
 \echo ''
-\echo '## 47 · Una etapa puede exigir su checklist cerrado -> debe fallar'
-update public.stages set require_checklist = true, required_fields = '{}'
-where slug = 'script' and pipeline_id = (select pipeline_id from public.videos where title = 'Video con plantilla');
-update public.videos
-set stage_id = (select s.id from public.stages s
-  where s.pipeline_id = videos.pipeline_id and s.slug = 'voiceover')
-where title = 'Video con plantilla';
-
-\echo ''
-\echo '## 48 · Un campo inventado no puede convertirse en requisito -> debe fallar'
+\echo '## 46 · Un campo inventado no puede convertirse en requisito -> debe fallar'
 update public.stages set required_fields = '{campo_inventado}'
 where slug = 'script' and pipeline_id = (select pipeline_id from public.videos where title = 'Video con plantilla');
 
 \echo ''
-\echo '## 49 · Mencionar a alguien le genera su propio aviso'
-update public.stages set require_checklist = false where slug = 'script';
+\echo '## 47 · El enlace tiene que ser http(s) -> debe fallar'
+insert into public.video_stage_links (video_id, stage_id, url)
+select
+  (select id from public.videos where title = 'Video con plantilla'),
+  (select s.id from public.stages s
+    where s.pipeline_id = (select pipeline_id from public.videos where title = 'Video con plantilla')
+    and s.slug = 'thumbnail'),
+  'javascript:alert(1)';
+
+\echo ''
+\echo '## 48 · El enlace tiene que ser de una etapa del mismo pipeline -> debe fallar'
+insert into public.video_stage_links (video_id, stage_id, url)
+select
+  (select id from public.videos where title = 'Video con plantilla'),
+  -- 'grabar' es del pipeline Shorts (## 27), no del de esta tarjeta.
+  (select id from public.stages where slug = 'grabar'),
+  'https://docs.example.com/de-otro-pipeline';
+
+\echo ''
+\echo '## 49 · Sin permiso de edicion no se puede guardar el enlace -> debe fallar'
+reset role;
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+set role authenticated;
+insert into public.video_stage_links (video_id, stage_id, url)
+select
+  (select id from public.videos where title = 'Video con plantilla'),
+  (select s.id from public.stages s
+    where s.pipeline_id = (select pipeline_id from public.videos where title = 'Video con plantilla')
+    and s.slug = 'thumbnail'),
+  'https://docs.example.com/miniatura';
+
+\echo ''
+\echo '## 50 · Duplicar un pipeline copia etapas, requisitos y quien las gestiona'
+reset role;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+set role authenticated;
+select public.duplicate_pipeline(
+  (select pipeline_id from public.videos where title = 'Video con plantilla'),
+  'Produccion - copia'
+) is not null as pipeline_creado;
+
+select
+  (select count(*) from public.stages where pipeline_id = (
+    select id from public.pipelines where name = 'Produccion - copia'
+  )) as etapas_copiadas,
+  (select deliverable_label from public.stages
+    where pipeline_id = (select id from public.pipelines where name = 'Produccion - copia')
+    and slug = 'script') as enlace_copiado,
+  (select count(*) from public.role_stages rs
+    join public.stages s on s.id = rs.stage_id
+    where s.pipeline_id = (select id from public.pipelines where name = 'Produccion - copia')
+  ) as roles_copiados;
+
+\echo ''
+\echo '## 51 · Duplicar exige permiso sobre pipelines -> debe fallar'
+reset role;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+set role authenticated;
+select public.duplicate_pipeline(
+  (select id from public.pipelines where name = 'Produccion - copia'),
+  'Otra copia'
+);
+
+\echo ''
+\echo '## 52 · Mencionar a alguien le genera su propio aviso'
+reset role;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+set role authenticated;
 insert into public.comments (video_id, author_id, body, mentions)
 select id, '11111111-1111-1111-1111-111111111111',
   'Ojo con el audio del minuto 2 @Bruno',
@@ -465,7 +496,7 @@ select type, count(*) from public.notifications
 where type in ('comment.mention', 'comment.created') group by type order by type;
 
 \echo ''
-\echo '## 50 · Una mencion a alguien de fuera del equipo se descarta'
+\echo '## 53 · Una mencion a alguien de fuera del equipo se descarta'
 reset role;
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 set role authenticated;
@@ -477,17 +508,11 @@ select count(*) as avisos_a_nuria from public.notifications
 where user_id = '44444444-4444-4444-4444-444444444444';
 
 \echo ''
-\echo '## 51 · Cada paso por una etapa queda registrado'
+\echo '## 54 · Cada paso por una etapa queda registrado'
 select count(*) as transiciones from public.stage_transitions
 where video_id = (select id from public.videos where title = 'Video con plantilla');
 
 \echo ''
-\echo '## 52 · Y de ahi sale el tiempo medio por etapa'
+\echo '## 55 · Y de ahi sale el tiempo medio por etapa'
 select count(*) as etapas_medidas
 from public.stage_durations((select id from public.workspaces limit 1), 90);
-
-\echo ''
-\echo '## 53 · El checklist de una tarjeta se guarda como plantilla del canal'
-select public.save_template_from_video(
-  (select id from public.videos where title = 'Video con plantilla')
-) as pasos_guardados;

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { pipelineSchema, stageSchema } from "@/lib/domain/validators";
+import { duplicatePipelineSchema, pipelineSchema, stageSchema } from "@/lib/domain/validators";
 import { requireWorkspace } from "@/lib/session";
 import { supabaseServer } from "@/lib/supabase/server";
 import { errorMessage, slugify } from "@/lib/utils";
@@ -143,7 +143,7 @@ export async function createStageAction(_prev: State, formData: FormData): Promi
     name: formData.get("name"),
     color: formData.get("color") ?? "#94a3b8",
     kind: formData.get("kind") ?? "work",
-    require_checklist: formData.get("require_checklist") === "on",
+    deliverable_label: formData.get("deliverable_label") ?? "",
     required_fields: formData.getAll("required_fields").map(String),
   });
   if (!pipelineId) return fail("Pipeline no valido");
@@ -167,7 +167,7 @@ export async function createStageAction(_prev: State, formData: FormData): Promi
     slug: `${base}-${Math.random().toString(36).slice(2, 6)}`,
     color: parsed.data.color,
     kind: parsed.data.kind,
-    require_checklist: parsed.data.require_checklist,
+    deliverable_label: parsed.data.deliverable_label ?? null,
     required_fields: parsed.data.required_fields,
     position: (last?.position ?? 0) + 1000,
   });
@@ -183,7 +183,7 @@ export async function updateStageAction(_prev: State, formData: FormData): Promi
     name: formData.get("name"),
     color: formData.get("color") ?? "#94a3b8",
     kind: formData.get("kind") ?? "work",
-    require_checklist: formData.get("require_checklist") === "on",
+    deliverable_label: formData.get("deliverable_label") ?? "",
     required_fields: formData.getAll("required_fields").map(String),
   });
   if (!id) return fail("Etapa no valida");
@@ -191,9 +191,37 @@ export async function updateStageAction(_prev: State, formData: FormData): Promi
 
   await requireWorkspace();
   const supabase = await supabaseServer();
-  const { error } = await supabase.from("stages").update(parsed.data).eq("id", id);
+  const { error } = await supabase
+    .from("stages")
+    .update({ ...parsed.data, deliverable_label: parsed.data.deliverable_label ?? null })
+    .eq("id", id);
 
   if (error) return fail(errorMessage(error));
+  revalidateAll();
+  return ok(undefined);
+}
+
+/**
+ * Duplica un pipeline entero: sus etapas (con requisitos y enlace) y quien
+ * gestiona cada una. Es la forma de darle a un canal su propio checklist sin
+ * empezar de cero, sin arrastrar a los canales que siguen en el original.
+ */
+export async function duplicatePipelineAction(_prev: State, formData: FormData): Promise<State> {
+  const parsed = duplicatePipelineSchema.safeParse({
+    pipeline_id: formData.get("pipeline_id"),
+    name: formData.get("name"),
+  });
+  if (!parsed.success) return fail("Revisa los datos", zodFieldErrors(parsed.error));
+
+  await requireWorkspace();
+  const supabase = await supabaseServer();
+
+  const { error } = await supabase.rpc("duplicate_pipeline", {
+    p_pipeline: parsed.data.pipeline_id,
+    p_name: parsed.data.name,
+  });
+
+  if (error) return fail(errorMessage(error, "No hemos podido duplicar el pipeline"));
   revalidateAll();
   return ok(undefined);
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, Pencil, Plus, Trash2 } from "lucide-react";
 import * as React from "react";
 import { useActionState, useTransition } from "react";
 import { toast } from "sonner";
@@ -20,6 +20,7 @@ import {
   createStageAction,
   deletePipelineAction,
   deleteStageAction,
+  duplicatePipelineAction,
   moveStageAction,
   updatePipelineAction,
   updateStageAction,
@@ -41,6 +42,7 @@ export function PipelinesPanel() {
   const { pipelines, allStagesOf, can } = useWorkspace();
   const [creating, setCreating] = React.useState(false);
   const [editing, setEditing] = React.useState<Pipeline | null>(null);
+  const [duplicating, setDuplicating] = React.useState<Pipeline | null>(null);
   const [stageOf, setStageOf] = React.useState<{ pipeline: Pipeline; stage: Stage | null } | null>(
     null,
   );
@@ -79,6 +81,16 @@ export function PipelinesPanel() {
                 <span className="text-ink-400 text-[11.5px]">{stages.length} etapas</span>
 
                 <span className="flex-1" />
+
+                <button
+                  type="button"
+                  onClick={() => setDuplicating(pipeline)}
+                  aria-label={`Duplicar ${pipeline.name}`}
+                  title="Duplicar pipeline"
+                  className="text-ink-400 hover:bg-canvas hover:text-ink-900 rounded-lg p-1.5 transition"
+                >
+                  <Copy className="size-3.5" />
+                </button>
 
                 <button
                   type="button"
@@ -205,6 +217,12 @@ export function PipelinesPanel() {
         onOpenChange={(open) => (open ? null : setEditing(null))}
         pipeline={editing}
       />
+      <DuplicatePipelineDialog
+        key={duplicating?.id ?? "duplicate-pipeline"}
+        open={Boolean(duplicating)}
+        onOpenChange={(open) => (open ? null : setDuplicating(null))}
+        pipeline={duplicating}
+      />
       <StageDialog
         key={`${stageOf?.pipeline.id ?? "none"}-${stageOf?.stage?.id ?? "new"}`}
         open={Boolean(stageOf)}
@@ -275,6 +293,62 @@ function PipelineDialog({
           </Button>
           <Button type="submit" loading={pending}>
             {pipeline ? "Guardar" : "Crear pipeline"}
+          </Button>
+        </div>
+      </form>
+    </Dialog>
+  );
+}
+
+function DuplicatePipelineDialog({
+  open,
+  onOpenChange,
+  pipeline,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  pipeline: Pipeline | null;
+}) {
+  const [state, formAction, pending] = useActionState(duplicatePipelineAction, null);
+
+  React.useEffect(() => {
+    if (state?.ok) onOpenChange(false);
+  }, [state, onOpenChange]);
+
+  if (!pipeline) return null;
+
+  return (
+    <Dialog
+      open={open}
+      onClose={() => onOpenChange(false)}
+      title={`Duplicar ${pipeline.name}`}
+      description="Copia las etapas, sus requisitos y quien las gestiona. El canal que lo use tiene su propio checklist, sin arrastrar a los demas."
+    >
+      <form action={formAction} className="space-y-4" noValidate>
+        <input type="hidden" name="pipeline_id" value={pipeline.id} />
+
+        {state && !state.ok ? (
+          <p className="rounded-lg bg-red-50 px-3 py-2 text-[13px] text-red-700" role="alert">
+            {state.error}
+          </p>
+        ) : null}
+
+        <Field label="Nombre del nuevo pipeline" htmlFor="duplicate-name">
+          <Input
+            id="duplicate-name"
+            name="name"
+            required
+            placeholder={`${pipeline.name} (copia)`}
+            defaultValue={`${pipeline.name} - copia`}
+          />
+        </Field>
+
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+          <Button type="submit" loading={pending}>
+            Duplicar
           </Button>
         </div>
       </form>
@@ -371,22 +445,19 @@ function StageDialog({
             adelante. Retroceder nunca se bloquea.
           </p>
 
-          <label className="hover:bg-canvas flex cursor-pointer items-start gap-2 rounded-lg p-1.5 transition">
-            <input
-              type="checkbox"
-              name="require_checklist"
-              defaultChecked={stage?.require_checklist ?? false}
-              className="accent-brand-500 mt-0.5 size-4 rounded"
+          <Field
+            label="Enlace que exige"
+            htmlFor="stage-deliverable"
+            hint='Ej. "Enlace del guion". Vacio: la etapa no pide ningun entregable. La etapa ES el paso del checklist.'
+          >
+            <Input
+              id="stage-deliverable"
+              name="deliverable_label"
+              defaultValue={stage?.deliverable_label ?? ""}
+              placeholder="Enlace de la miniatura"
+              maxLength={60}
             />
-            <span className="min-w-0">
-              <span className="text-ink-900 block text-[12.5px] font-medium">
-                Checklist de la etapa cerrado
-              </span>
-              <span className="text-ink-400 block text-[11.5px]">
-                Todos los pasos asignados a esta etapa tienen que estar marcados.
-              </span>
-            </span>
-          </label>
+          </Field>
 
           <p className="text-ink-500 mt-2.5 mb-1.5 text-[11.5px] font-medium">
             Campos obligatorios

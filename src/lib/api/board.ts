@@ -89,7 +89,6 @@ export async function addChecklistItem(payload: {
   video_id: string;
   title: string;
   position: number;
-  stage_id?: string | null;
   role_id?: string | null;
 }) {
   const supabase = supabaseBrowser();
@@ -119,10 +118,38 @@ export async function setChecklistDone(id: string, done: boolean) {
 
 export async function updateChecklistItem(
   id: string,
-  patch: { title?: string; role_id?: string | null; stage_id?: string | null },
+  patch: { title?: string; role_id?: string | null },
 ) {
   const supabase = supabaseBrowser();
   const { error } = await supabase.from("checklist_items").update(patch).eq("id", id);
+  if (error) throw error;
+}
+
+// --- Enlaces de etapa --------------------------------------------------
+//
+// El entregable de una etapa (guardar el link y dejar avanzar la tarjeta).
+// No usa RPC: la fila la valida RLS igual que el resto de la app.
+
+export async function saveStageLink(videoId: string, stageId: string, url: string) {
+  const supabase = supabaseBrowser();
+  // completed_by y completed_at los pone un trigger, no el cliente: asi
+  // siempre reflejan a quien de verdad guardo el enlace, sin poder falsearse.
+  const { data, error } = await supabase
+    .from("video_stage_links")
+    .upsert({ video_id: videoId, stage_id: stageId, url }, { onConflict: "video_id,stage_id" })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteStageLink(videoId: string, stageId: string) {
+  const supabase = supabaseBrowser();
+  const { error } = await supabase
+    .from("video_stage_links")
+    .delete()
+    .eq("video_id", videoId)
+    .eq("stage_id", stageId);
   if (error) throw error;
 }
 

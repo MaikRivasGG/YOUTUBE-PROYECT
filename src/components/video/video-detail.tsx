@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Archive, MoreHorizontal, Save, Trash2, MonitorPlay } from "lucide-react";
+import { ArrowLeft, Archive, MoreHorizontal, Trash2, MonitorPlay } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import * as React from "react";
@@ -9,10 +9,13 @@ import { toast } from "sonner";
 import { AssetsPanel, type AssetRow } from "@/components/video/assets-panel";
 import { ChecklistPanel, type ChecklistRow } from "@/components/video/checklist-panel";
 import { CommentsPanel, type CommentRow } from "@/components/video/comments-panel";
+import {
+  StageDeliverablesPanel,
+  type StageLinkRow,
+} from "@/components/video/stage-deliverables-panel";
 import { useWorkspace } from "@/components/providers/workspace-provider";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Menu, MenuItem, MenuSeparator } from "@/components/ui/menu";
 import { Card } from "@/components/ui/misc";
@@ -28,7 +31,6 @@ import { toDateInput } from "@/lib/dates";
 import { PRIORITIES, priorityMeta } from "@/lib/domain/pipeline";
 import { canMoveVideo } from "@/lib/domain/roles";
 import { cn, errorMessage, isSafeHttpUrl } from "@/lib/utils";
-import { saveTemplateFromVideoAction } from "@/server/actions/templates";
 import type { VideoDetail as VideoDetailData } from "@/server/queries";
 import type { Video } from "@/types/database";
 
@@ -45,7 +47,6 @@ export function VideoDetailView({ video: initial }: { video: VideoDetailData }) 
     initial.video_assignees.map((assignee) => assignee.user_id),
   );
   const [savingField, setSavingField] = React.useState<string | null>(null);
-  const [savingTemplate, startTemplate] = React.useTransition();
 
   const editable = can("video.edit");
   const stage = workspace.stageById(video.stage_id);
@@ -418,39 +419,19 @@ export function VideoDetailView({ video: initial }: { video: VideoDetailData }) 
             </Card>
 
             <Card className="p-4">
+              <StageDeliverablesPanel
+                videoId={video.id}
+                pipelineId={video.pipeline_id}
+                currentStageId={video.stage_id}
+                initial={video.video_stage_links as StageLinkRow[]}
+              />
+            </Card>
+
+            <Card className="p-4">
               <ChecklistPanel
                 videoId={video.id}
                 initial={video.checklist_items as ChecklistRow[]}
               />
-
-              {can("channel.manage") && video.channel_id ? (
-                <div className="border-line mt-3 flex items-center justify-between gap-2 border-t pt-3">
-                  <p className="text-ink-400 text-[11.5px]">
-                    Guarda este checklist como plantilla del canal y los videos nuevos nacerán con
-                    él.
-                  </p>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    loading={savingTemplate}
-                    onClick={() =>
-                      startTemplate(async () => {
-                        const result = await saveTemplateFromVideoAction(video.id);
-                        if (!result.ok) toast.error(result.error);
-                        else
-                          toast.success(
-                            `Plantilla guardada con ${result.data.steps} paso${
-                              result.data.steps === 1 ? "" : "s"
-                            }`,
-                          );
-                      })
-                    }
-                  >
-                    <Save className="size-3.5" aria-hidden />
-                    Guardar como plantilla
-                  </Button>
-                </div>
-              ) : null}
             </Card>
 
             <Card className="p-4">

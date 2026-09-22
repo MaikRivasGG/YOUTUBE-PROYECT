@@ -22,7 +22,6 @@ import { cn, errorMessage } from "@/lib/utils";
 export interface ChecklistRow {
   id: string;
   title: string;
-  stage_id: string | null;
   role_id: string | null;
   is_done: boolean;
   done_at: string | null;
@@ -164,7 +163,7 @@ export function ChecklistPanel({ videoId, initial }: { videoId: string; initial:
   return (
     <section>
       <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-ink-900 text-[14px] font-semibold">Checklist de produccion</h2>
+        <h2 className="text-ink-900 text-[14px] font-semibold">Notas y subtareas</h2>
         <span className="text-ink-400 text-[12px]">
           {done}/{items.length}
         </span>

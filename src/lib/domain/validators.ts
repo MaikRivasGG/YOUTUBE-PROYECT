@@ -79,15 +79,12 @@ export const stageSchema = z.object({
   name: z.string().trim().min(1, "Escribe un nombre").max(40),
   color: hexColor,
   kind: z.enum(stageKindValues),
-  require_checklist: z.boolean().default(false),
+  /**
+   * Nombre del enlace que exige esta etapa (ej. "Enlace del guion"). Vacio
+   * significa que la etapa no pide ningun entregable.
+   */
+  deliverable_label: optionalText(60),
   required_fields: z.array(z.enum(REQUIRABLE_FIELDS)).default([]),
-});
-
-/** Un paso de la plantilla de produccion de un canal. */
-export const templateItemSchema = z.object({
-  title: z.string().trim().min(1, "Escribe el paso").max(200),
-  stage_id: z.string().uuid().nullable().default(null),
-  role_id: z.string().uuid().nullable().default(null),
 });
 
 export const roleSchema = z.object({
@@ -148,8 +145,22 @@ export const commentSchema = z.object({
 export const checklistItemSchema = z.object({
   video_id: z.string().uuid(),
   title: z.string().trim().min(1, "Escribe la tarea").max(200),
-  stage_id: z.string().uuid().nullable().optional(),
   role_id: z.string().uuid().nullable().optional(),
+});
+
+/** El enlace que se guarda al completar el entregable de una etapa. */
+export const stageLinkSchema = z.object({
+  video_id: z.string().uuid(),
+  stage_id: z.string().uuid(),
+  url: z
+    .string()
+    .trim()
+    .refine((value) => /^https?:\/\//i.test(value), "Debe ser una URL http(s) valida"),
+});
+
+export const duplicatePipelineSchema = z.object({
+  pipeline_id: z.string().uuid(),
+  name: z.string().trim().min(2, "Minimo 2 caracteres").max(60),
 });
 
 export const assetSchema = z.object({
@@ -173,4 +184,4 @@ export type ChannelInput = z.infer<typeof channelSchema>;
 export type CreateVideoInput = z.infer<typeof createVideoSchema>;
 export type RoleInput = z.infer<typeof roleSchema>;
 export type StageInput = z.infer<typeof stageSchema>;
-export type TemplateItemInput = z.infer<typeof templateItemSchema>;
+export type StageLinkInput = z.infer<typeof stageLinkSchema>;

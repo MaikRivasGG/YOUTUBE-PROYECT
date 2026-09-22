@@ -118,7 +118,7 @@ export const REQUIRABLE_FIELD_LABELS: { value: RequirableField; label: string }[
 export function stageRequirementsSummary(stage: Stage): string | null {
   const parts: string[] = [];
 
-  if (stage.require_checklist) parts.push("checklist cerrado");
+  if (stage.deliverable_label) parts.push(`enlace de ${stage.deliverable_label.toLowerCase()}`);
 
   for (const field of stage.required_fields ?? []) {
     const label = REQUIRABLE_FIELD_LABELS.find((item) => item.value === field)?.label;

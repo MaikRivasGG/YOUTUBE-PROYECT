@@ -80,8 +80,12 @@ export type Stage = {
   color: string;
   kind: StageKind;
   position: number;
-  /** Exige que los pasos del checklist de esta etapa esten cerrados. */
-  require_checklist: boolean;
+  /**
+   * Nombre del enlace que esta etapa exige (p. ej. "Enlace del guion").
+   * Null: la etapa no pide ningun entregable para dejar avanzar la tarjeta.
+   * La etapa ES el paso del checklist: no hay una plantilla aparte.
+   */
+  deliverable_label: string | null;
   /** Campos del video que tienen que estar rellenos para avanzar. */
   required_fields: RequirableField[];
   created_at: string;
@@ -183,11 +187,17 @@ export type VideoAssignee = {
   created_at: string;
 };
 
+/**
+ * Paso suelto de la tarjeta, sin relacion con el pipeline.
+ *
+ * El checklist "de verdad" -lo que bloquea avanzar de etapa- son las propias
+ * etapas del pipeline con su `deliverable_label` (ver VideoStageLink). Esto es
+ * la lista libre para lo que no encaja ahi: notas, subtareas puntuales.
+ */
 export type ChecklistItem = {
   id: string;
   video_id: string;
   title: string;
-  stage_id: string | null;
   role_id: string | null;
   is_done: boolean;
   done_at: string | null;
@@ -214,15 +224,18 @@ export type Comment = {
   updated_at: string;
 };
 
-/** Paso de la plantilla de produccion de un canal. */
-export type ChannelTemplateItem = {
-  id: string;
-  channel_id: string;
-  title: string;
-  stage_id: string | null;
-  role_id: string | null;
-  position: number;
-  created_at: string;
+/**
+ * El enlace entregado en una etapa de una tarjeta (el guion, la miniatura...).
+ *
+ * Solo existe si la etapa pide uno (`stages.deliverable_label` no nulo).
+ * Rellenarlo es lo que satisface el requisito de esa etapa para avanzar.
+ */
+export type VideoStageLink = {
+  video_id: string;
+  stage_id: string;
+  url: string;
+  completed_by: string | null;
+  completed_at: string;
 };
 
 /** Entrada de una tarjeta en una etapa; de aqui salen los tiempos por etapa. */
@@ -311,7 +324,7 @@ export type Database = {
           | "color"
           | "kind"
           | "position"
-          | "require_checklist"
+          | "deliverable_label"
           | "required_fields"
         >
       >;
@@ -391,7 +404,6 @@ export type Database = {
           ChecklistItem,
           | "id"
           | "created_at"
-          | "stage_id"
           | "role_id"
           | "is_done"
           | "done_at"
@@ -402,9 +414,9 @@ export type Database = {
       >;
       checklist_assignees: TableDef<ChecklistAssignee, Insert<ChecklistAssignee, "created_at">>;
       comments: TableDef<Comment, Insert<Comment, "id" | Timestamps | "mentions">>;
-      channel_template_items: TableDef<
-        ChannelTemplateItem,
-        Insert<ChannelTemplateItem, "id" | "created_at" | "stage_id" | "role_id" | "position">
+      video_stage_links: TableDef<
+        VideoStageLink,
+        Insert<VideoStageLink, "completed_by" | "completed_at">
       >;
       stage_transitions: TableDef<
         StageTransition,
@@ -440,7 +452,7 @@ export type Database = {
       has_permission: { Args: { p_workspace: string; p_permission: string }; Returns: boolean };
       is_owner: { Args: { p_workspace: string }; Returns: boolean };
       stage_exit_blockers: { Args: { p_video: string; p_stage: string }; Returns: string[] };
-      save_template_from_video: { Args: { p_video: string }; Returns: number };
+      duplicate_pipeline: { Args: { p_pipeline: string; p_name: string }; Returns: string };
       stage_durations: {
         Args: { p_workspace: string; p_days?: number };
         Returns: { stage_id: string; avg_hours: number; samples: number }[];
