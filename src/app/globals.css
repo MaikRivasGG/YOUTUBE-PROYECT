@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/*
+ * Modo oscuro por clase, no por preferencia del sistema: el interruptor de
+ * ThemeToggle pone/quita `.dark` en <html> y todo lo que sigue reacciona,
+ * porque los tokens de abajo son variables CSS normales, no valores fijos.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ==========================================================================
    Design tokens - Framehouse
    Derivados del prototipo: lateral oscuro, lienzo claro y acento naranja.
@@ -29,6 +36,25 @@
   --radius-card: 0.75rem;
 
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+/*
+ * Mismos nombres de variable, valores oscuros: el lienzo y las tarjetas pasan
+ * a los tonos del lateral, para que de dia y de noche se sienta la misma app.
+ */
+.dark {
+  --color-canvas: #14161c;
+  --color-surface: #1a1d25;
+  --color-column: #20232c;
+  --color-line: #2b2f3a;
+
+  --color-ink-900: #f3f4f6;
+  --color-ink-700: #c7cbd4;
+  --color-ink-500: #8b93a3;
+  --color-ink-400: #5d6470;
+
+  --color-brand-50: #3a2015;
+  --color-brand-100: #542c19;
 }
 
 @layer base {

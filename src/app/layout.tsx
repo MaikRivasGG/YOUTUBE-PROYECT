@@ -26,9 +26,21 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
+/** Fija la clase `dark` antes de pintar, para no parpadear del tema equivocado. */
+const THEME_SCRIPT = `
+try {
+  var theme = localStorage.getItem('framehouse-theme');
+  var dark = theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.classList.toggle('dark', dark);
+} catch (e) {}
+`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={inter.variable}>
+    <html lang="es" className={inter.variable} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body className="min-h-dvh antialiased">
         {children}
         <Toaster

@@ -5,6 +5,7 @@ import * as React from "react";
 
 import { CommandPalette } from "@/components/layout/command-palette";
 import { NotificationsBell } from "@/components/layout/notifications-bell";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { useWorkspace } from "@/components/providers/workspace-provider";
 import { Button } from "@/components/ui/button";
 import { CreateVideoDialog } from "@/components/video/create-video-dialog";
@@ -73,6 +74,7 @@ export function PageHeader({
               <Search className="size-4" />
             </button>
 
+            <ThemeToggle />
             <NotificationsBell initial={notifications} />
 
             {can("video.create") ? (

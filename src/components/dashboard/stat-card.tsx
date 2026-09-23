@@ -15,18 +15,18 @@ export interface StatCardProps {
 }
 
 const TONES = {
-  brand: "bg-brand-50 text-brand-600",
-  amber: "bg-amber-50 text-amber-600",
-  violet: "bg-violet-50 text-violet-600",
-  emerald: "bg-emerald-50 text-emerald-600",
-  red: "bg-red-50 text-red-600",
+  brand: "bg-brand-50 text-brand-600 dark:text-brand-500",
+  amber: "bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400",
+  violet: "bg-violet-50 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400",
+  emerald: "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400",
+  red: "bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-400",
 } as const;
 
 const FOOTNOTES = {
   muted: "text-ink-400",
-  positive: "text-emerald-600",
-  warning: "text-amber-600",
-  danger: "text-red-600",
+  positive: "text-emerald-600 dark:text-emerald-400",
+  warning: "text-amber-600 dark:text-amber-400",
+  danger: "text-red-600 dark:text-red-400",
 } as const;
 
 export function StatCard({

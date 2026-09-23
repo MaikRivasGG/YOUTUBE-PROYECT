@@ -77,10 +77,26 @@ export interface PriorityMeta {
 }
 
 export const PRIORITIES: PriorityMeta[] = [
-  { value: "low", label: "Baja", chip: "bg-slate-100 text-slate-500" },
-  { value: "normal", label: "Media", chip: "bg-slate-100 text-slate-600" },
-  { value: "high", label: "Alta", chip: "bg-amber-100 text-amber-700" },
-  { value: "urgent", label: "Urgente", chip: "bg-red-100 text-red-600" },
+  {
+    value: "low",
+    label: "Baja",
+    chip: "bg-slate-100 text-slate-500 dark:bg-slate-500/15 dark:text-slate-300",
+  },
+  {
+    value: "normal",
+    label: "Media",
+    chip: "bg-slate-100 text-slate-600 dark:bg-slate-500/15 dark:text-slate-300",
+  },
+  {
+    value: "high",
+    label: "Alta",
+    chip: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400",
+  },
+  {
+    value: "urgent",
+    label: "Urgente",
+    chip: "bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-400",
+  },
 ];
 
 const PRIORITY_MAP = new Map(PRIORITIES.map((priority) => [priority.value, priority]));

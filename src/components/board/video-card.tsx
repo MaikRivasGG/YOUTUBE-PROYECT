@@ -9,46 +9,14 @@ import * as React from "react";
 import { useWorkspace } from "@/components/providers/workspace-provider";
 import { AvatarStack } from "@/components/ui/avatar";
 import { Badge, Dot } from "@/components/ui/badge";
+import { ChannelMark } from "@/components/ui/channel-mark";
 import { Progress } from "@/components/ui/misc";
 import { progressOf } from "@/lib/board-state";
 import { dueLabel, isOverdue } from "@/lib/dates";
 import { priorityMeta } from "@/lib/domain/pipeline";
-import { cn, initials } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { extractYouTubeId, youtubeThumbnailUrl } from "@/lib/youtube";
 import type { BoardVideo } from "@/server/queries";
-
-/** Miniatura del canal: su imagen si la tiene, o sus iniciales sobre su color. */
-function ChannelMark({
-  name,
-  color,
-  imageUrl,
-}: {
-  name: string;
-  color: string;
-  imageUrl: string | null;
-}) {
-  if (imageUrl) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element -- imagenes subidas por el equipo
-      <img
-        src={imageUrl}
-        alt=""
-        className="size-4 shrink-0 rounded-[5px] object-cover"
-        loading="lazy"
-      />
-    );
-  }
-
-  return (
-    <span
-      aria-hidden
-      className="grid size-4 shrink-0 place-items-center rounded-[5px] text-[8px] font-bold text-white"
-      style={{ backgroundColor: color }}
-    >
-      {initials(name)}
-    </span>
-  );
-}
 
 export function VideoCard({
   video,
