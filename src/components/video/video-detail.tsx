@@ -16,7 +16,7 @@ import {
 import { useWorkspace } from "@/components/providers/workspace-provider";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Field, Input, Select, Textarea } from "@/components/ui/field";
+import { Field, Input, Select } from "@/components/ui/field";
 import { Menu, MenuItem, MenuSeparator } from "@/components/ui/menu";
 import { Card } from "@/components/ui/misc";
 import {
@@ -247,35 +247,29 @@ export function VideoDetailView({ video: initial }: { video: VideoDetailData }) 
                 ) : null}
               </div>
 
-              <div className="mt-5 space-y-4">
-                <Field label="Hook" hint="Los primeros 5 segundos deciden la retencion.">
-                  <Textarea
-                    defaultValue={video.hook ?? ""}
-                    disabled={!editable}
-                    rows={2}
-                    className="min-h-16"
-                    onBlur={(event) => save("hook", event.target.value.trim() || null)}
-                  />
-                </Field>
-
-                <Field label="Descripción / brief">
-                  <Textarea
-                    defaultValue={video.description ?? ""}
-                    disabled={!editable}
-                    rows={4}
-                    onBlur={(event) => save("description", event.target.value.trim() || null)}
-                  />
-                </Field>
-
-                <Field label="Guion">
-                  <Textarea
-                    defaultValue={video.script_body ?? ""}
-                    disabled={!editable}
-                    rows={12}
-                    className="min-h-56 font-mono text-[12.5px] leading-relaxed"
-                    placeholder="Escribe o pega aquí el guion completo..."
-                    onBlur={(event) => save("script_body", event.target.value.trim() || null)}
-                  />
+              <div className="mt-5">
+                <Field
+                  label="Referencias"
+                  hint="Link de YouTube usado como referencia visual o de estilo para esta tarjeta."
+                >
+                  <div className="flex gap-3">
+                    {referenceThumbnail ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- miniatura publica de YouTube
+                      <img
+                        src={referenceThumbnail}
+                        alt=""
+                        className="bg-column h-16 w-28 shrink-0 rounded-md object-cover"
+                      />
+                    ) : null}
+                    <Input
+                      type="url"
+                      defaultValue={video.reference_url ?? ""}
+                      disabled={!editable}
+                      placeholder="https://youtube.com/watch?v=..."
+                      className="flex-1"
+                      onBlur={(event) => save("reference_url", event.target.value.trim() || null)}
+                    />
+                  </div>
                 </Field>
               </div>
             </Card>
@@ -375,27 +369,15 @@ export function VideoDetailView({ video: initial }: { video: VideoDetailData }) 
                   onBlur={(event) => save("thumbnail_url", event.target.value.trim() || null)}
                 />
               </Field>
+            </Card>
 
-              <Field label="Miniatura de referencia" hint="Video de YouTube usado como referencia.">
-                <div className="flex gap-3">
-                  {referenceThumbnail ? (
-                    // eslint-disable-next-line @next/next/no-img-element -- miniatura publica de YouTube
-                    <img
-                      src={referenceThumbnail}
-                      alt=""
-                      className="bg-column h-14 w-24 shrink-0 rounded-md object-cover"
-                    />
-                  ) : null}
-                  <Input
-                    type="url"
-                    defaultValue={video.reference_url ?? ""}
-                    disabled={!editable}
-                    placeholder="https://youtube.com/watch?v=..."
-                    className="flex-1"
-                    onBlur={(event) => save("reference_url", event.target.value.trim() || null)}
-                  />
-                </div>
-              </Field>
+            <Card className="p-4">
+              <StageDeliverablesPanel
+                videoId={video.id}
+                pipelineId={video.pipeline_id}
+                currentStageId={video.stage_id}
+                initial={video.video_stage_links as StageLinkRow[]}
+              />
             </Card>
 
             <Card className="p-4">
@@ -440,15 +422,6 @@ export function VideoDetailView({ video: initial }: { video: VideoDetailData }) 
                   );
                 })}
               </ul>
-            </Card>
-
-            <Card className="p-4">
-              <StageDeliverablesPanel
-                videoId={video.id}
-                pipelineId={video.pipeline_id}
-                currentStageId={video.stage_id}
-                initial={video.video_stage_links as StageLinkRow[]}
-              />
             </Card>
 
             <Card className="p-4">

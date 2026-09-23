@@ -152,9 +152,6 @@ export function tint(color: string, alpha = "1a"): string {
  * existe, la base lo rechaza al guardar.
  */
 export const REQUIRABLE_FIELD_LABELS: { value: RequirableField; label: string }[] = [
-  { value: "script_body", label: "Guion" },
-  { value: "hook", label: "Hook" },
-  { value: "description", label: "Descripcion" },
   { value: "thumbnail_url", label: "Miniatura" },
   { value: "youtube_url", label: "Enlace de YouTube" },
   { value: "channel_id", label: "Canal" },

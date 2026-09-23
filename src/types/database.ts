@@ -58,9 +58,6 @@ export type Pipeline = {
 
 /** Campos del video que una etapa puede exigir antes de dejar pasar la tarjeta. */
 export const REQUIRABLE_FIELDS = [
-  "hook",
-  "description",
-  "script_body",
   "due_date",
   "publish_at",
   "youtube_url",
