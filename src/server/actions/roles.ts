@@ -21,6 +21,7 @@ function readRole(formData: FormData) {
     manage_workspace: flag("manage_workspace"),
     manage_members: flag("manage_members"),
     manage_channels: flag("manage_channels"),
+    view_all_channels: flag("view_all_channels"),
     manage_pipelines: flag("manage_pipelines"),
     create_videos: flag("create_videos"),
     delete_videos: flag("delete_videos"),

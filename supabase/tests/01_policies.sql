@@ -66,6 +66,18 @@ insert into public.member_roles (workspace_id, user_id, role_id)
   from public.workspaces w join public.roles r on r.workspace_id = w.id
   where r.name = 'Observador';
 
+-- Ni Disenador ni Observador llevan el permiso 'Ver todos los canales', asi
+-- que sin esto Bruno y Carla no verian ningun canal: se les da acceso
+-- explicito a los 4 canales de muestra, como haria Ana desde Canales, para
+-- que el resto de escenarios (que no van de esto) sigan probando lo suyo.
+insert into public.channel_members (channel_id, user_id)
+select c.id, u.user_id
+from public.channels c
+cross join (values
+  ('22222222-2222-2222-2222-222222222222'::uuid),
+  ('33333333-3333-3333-3333-333333333333'::uuid)
+) as u(user_id);
+
 \echo ''
 \echo '## 7 · Bruno mueve de GUION a GRABACION -> debe fallar (no es su etapa)'
 reset role;
@@ -516,3 +528,78 @@ where video_id = (select id from public.videos where title = 'Video con plantill
 \echo '## 55 · Y de ahi sale el tiempo medio por etapa'
 select count(*) as etapas_medidas
 from public.stage_durations((select id from public.workspaces limit 1), 90);
+
+-- ---------------------------------------------------------------------------
+-- Acceso por canal: sin ser miembro participante no se ve nada de un canal,
+-- salvo con el permiso 'Ver todos los canales'.
+-- ---------------------------------------------------------------------------
+
+\echo ''
+\echo '## 56 · Sin ser miembro participante de un canal, no se ve el canal'
+reset role;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+set role authenticated;
+delete from public.channel_members
+where user_id = '33333333-3333-3333-3333-333333333333'
+  and channel_id = (select id from public.channels where name = 'Pulso Tech');
+
+reset role;
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+set role authenticated;
+select count(*) as pulso_tech_para_carla from public.channels where name = 'Pulso Tech';
+
+\echo ''
+\echo '## 57 · Ni sus videos, ni sus checklists, ni sus enlaces de etapa'
+select count(*) as videos_pulso_tech_para_carla
+from public.videos where channel_id = (select id from public.channels where name = 'Pulso Tech');
+
+\echo ''
+\echo '## 58 · Tampoco cuenta en sus estadisticas del equipo'
+select
+  (public.workspace_stats((select id from public.workspaces limit 1)) ->> 'channels')::int
+    as canales_para_carla;
+
+\echo ''
+\echo '## 59 · Moverla a ciegas por RPC tambien falla -> debe fallar'
+select public.move_video(
+  (select v.id from public.videos v
+   where v.channel_id = (select id from public.channels where name = 'Pulso Tech')
+   limit 1),
+  (select s.id from public.stages s
+   join public.channels c on c.pipeline_id = s.pipeline_id
+   where c.name = 'Pulso Tech' and s.slug = 'script'),
+  1000
+);
+
+\echo ''
+\echo '## 60 · Al re-anadirla como miembro participante, vuelve a verlo todo'
+reset role;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+set role authenticated;
+insert into public.channel_members (channel_id, user_id)
+values ((select id from public.channels where name = 'Pulso Tech'),
+        '33333333-3333-3333-3333-333333333333');
+
+reset role;
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+set role authenticated;
+select count(*) as pulso_tech_para_carla_otra_vez
+from public.channels where name = 'Pulso Tech';
+
+\echo ''
+\echo '## 61 · Quien tiene "Ver todos los canales" no necesita ser miembro participante'
+reset role;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+set role authenticated;
+delete from public.channel_members
+where channel_id = (select id from public.channels where name = 'Pulso Tech');
+select count(*) as pulso_tech_para_ana from public.channels where name = 'Pulso Tech';
+
+\echo ''
+\echo '## 62 · Gestionar quien es miembro participante exige channel.manage -> debe fallar'
+reset role;
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+set role authenticated;
+insert into public.channel_members (channel_id, user_id)
+values ((select id from public.channels where name = 'Pulso Tech'),
+        '33333333-3333-3333-3333-333333333333');

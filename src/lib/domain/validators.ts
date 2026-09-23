@@ -93,6 +93,7 @@ export const roleSchema = z.object({
   manage_workspace: z.boolean().default(false),
   manage_members: z.boolean().default(false),
   manage_channels: z.boolean().default(false),
+  view_all_channels: z.boolean().default(false),
   manage_pipelines: z.boolean().default(false),
   create_videos: z.boolean().default(false),
   delete_videos: z.boolean().default(false),

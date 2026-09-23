@@ -27,10 +27,12 @@ import {
   EMPTY_FILTERS,
   applyFilters,
   computeMove,
+  groupByKind,
   groupByStage,
   videosOfPipeline,
   type BoardFilters,
 } from "@/lib/board-state";
+import { GENERAL_VIEW_PIPELINE_ID, generalViewStages } from "@/lib/domain/pipeline";
 import { canMoveVideo } from "@/lib/domain/roles";
 import { errorMessage } from "@/lib/utils";
 import type { BoardVideo } from "@/server/queries";
@@ -79,18 +81,28 @@ export function Board({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const stages = workspace.stagesOf(pipelineId);
-  const inPipeline = React.useMemo(
-    () =>
-      videosOfPipeline(videos, pipelineId).filter((video) => !hiddenStageIds.has(video.stage_id)),
-    [videos, pipelineId, hiddenStageIds],
+  const isGeneralView = pipelineId === GENERAL_VIEW_PIPELINE_ID;
+  const stages = React.useMemo(
+    () => (isGeneralView ? generalViewStages() : workspace.stagesOf(pipelineId)),
+    [isGeneralView, pipelineId, workspace],
   );
+  const inPipeline = React.useMemo(() => {
+    const live = videos.filter((video) => !hiddenStageIds.has(video.stage_id));
+    return isGeneralView ? live : videosOfPipeline(live, pipelineId);
+  }, [videos, pipelineId, hiddenStageIds, isGeneralView]);
   const visible = React.useMemo(() => applyFilters(inPipeline, filters), [inPipeline, filters]);
-  const grouped = React.useMemo(() => groupByStage(visible), [visible]);
+  const grouped = React.useMemo(
+    () =>
+      isGeneralView
+        ? groupByKind(visible, (stageId) => workspace.stageById(stageId)?.kind)
+        : groupByStage(visible),
+    [visible, isGeneralView, workspace],
+  );
   const dragging = draggingId ? videos.find((video) => video.id === draggingId) : null;
 
   const allowedToMove = React.useCallback(
     (video: BoardVideo, toStageId: string) =>
+      !isGeneralView &&
       canMoveVideo({
         roles: myRoles,
         managedStageIds: managedStages,
@@ -99,7 +111,7 @@ export function Board({
         fromStageId: video.stage_id,
         toStageId,
       }),
-    [myRoles, managedStages, userId],
+    [myRoles, managedStages, userId, isGeneralView],
   );
 
   function handleDragStart(event: DragStartEvent) {
@@ -159,12 +171,15 @@ export function Board({
 
   const pipeline = pipelines.find((item) => item.id === pipelineId);
   const channel = workspace.channelById(filters.channelId);
+  const pipelineLabel = isGeneralView
+    ? "Vista general (todos los canales)"
+    : (pipeline?.name ?? null);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       {/* Etiqueta fija: canal y pipeline no son lo mismo y aqui se ven los dos
           a la vez, para no confundir "que veo" con "por que flujo va". */}
-      <BoardScope pipelineName={pipeline?.name ?? null} channel={channel ?? null} />
+      <BoardScope pipelineName={pipelineLabel} channel={channel ?? null} />
 
       <BoardFiltersBar
         filters={filters}
@@ -198,8 +213,11 @@ export function Board({
               pipelineId={pipelineId}
               videos={grouped.get(stage.id) ?? []}
               // Cualquier miembro puede arrastrar: el destino concreto se
-              // valida al soltar y se avisa si su rol no lo permite.
-              canDrag={() => workspace.can("video.edit")}
+              // valida al soltar y se avisa si su rol no lo permite. En la
+              // Vista general no se arrastra: mezcla tarjetas de pipelines
+              // distintos y no hay una unica etapa de destino valida.
+              canDrag={() => !isGeneralView && workspace.can("video.edit")}
+              readOnly={isGeneralView}
             />
           ))}
         </div>

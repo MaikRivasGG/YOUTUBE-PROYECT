@@ -14,6 +14,7 @@ function role(overrides: Partial<Role> & { name: string }): Role {
     manage_workspace: false,
     manage_members: false,
     manage_channels: false,
+    view_all_channels: false,
     manage_pipelines: false,
     create_videos: false,
     delete_videos: false,

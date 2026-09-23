@@ -36,6 +36,40 @@ export function stagesOfPipeline(stages: Stage[], pipelineId: string): Stage[] {
   return sortStages(stages.filter((stage) => stage.pipeline_id === pipelineId));
 }
 
+/** Id del pseudo-pipeline "Vista general": no existe en la base de datos. */
+export const GENERAL_VIEW_PIPELINE_ID = "__general__";
+
+const GENERAL_VIEW_COLORS: Record<StageKind, string> = {
+  backlog: "#94a3b8",
+  work: "#3b82f6",
+  review: "#8b5cf6",
+  scheduled: "#22c55e",
+  done: "#0d9488",
+  archived: "#cbd5e1",
+};
+
+/**
+ * Columnas de la Vista general: una por cada StageKind (el unico dato de
+ * etapa que sigue siendo comparable entre canales con pipelines distintos),
+ * en vez de las etapas de un pipeline concreto. Solo para mostrar: no se
+ * pueden arrastrar tarjetas entre ellas.
+ */
+export function generalViewStages(): Stage[] {
+  return STAGE_KINDS.filter((kind) => kind.value !== "archived").map((kind, index) => ({
+    id: kind.value,
+    pipeline_id: GENERAL_VIEW_PIPELINE_ID,
+    name: kind.label,
+    slug: kind.value,
+    color: GENERAL_VIEW_COLORS[kind.value],
+    kind: kind.value,
+    position: index * 1000,
+    deliverable_label: null,
+    required_fields: [],
+    created_at: "",
+    updated_at: "",
+  }));
+}
+
 export interface PriorityMeta {
   value: VideoPriority;
   label: string;

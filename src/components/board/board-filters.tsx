@@ -5,6 +5,7 @@ import { ListFilter, X } from "lucide-react";
 import { useWorkspace } from "@/components/providers/workspace-provider";
 import { Select } from "@/components/ui/field";
 import type { BoardFilters } from "@/lib/board-state";
+import { GENERAL_VIEW_PIPELINE_ID } from "@/lib/domain/pipeline";
 import { cn } from "@/lib/utils";
 
 export function BoardFiltersBar({
@@ -24,12 +25,13 @@ export function BoardFiltersBar({
   pipelineId: string;
   onPipelineChange: (pipelineId: string) => void;
 }) {
-  const { channels, members, pipelines } = useWorkspace();
+  const { channels, members, pipelines, can } = useWorkspace();
   const filtered = visible !== total;
+  const canViewAll = can("channel.view_all");
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {pipelines.length > 1 ? (
+      {pipelines.length > 1 || canViewAll ? (
         <Select
           aria-label="Pipeline"
           className="h-8 w-auto min-w-36 text-[13px] font-semibold"
@@ -41,6 +43,9 @@ export function BoardFiltersBar({
               {pipeline.name}
             </option>
           ))}
+          {canViewAll ? (
+            <option value={GENERAL_VIEW_PIPELINE_ID}>Vista general (todos los canales)</option>
+          ) : null}
         </Select>
       ) : (
         <h2 className="text-ink-900 text-[15px] font-semibold">

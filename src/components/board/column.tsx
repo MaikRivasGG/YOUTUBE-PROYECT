@@ -17,11 +17,14 @@ export function BoardColumn({
   pipelineId,
   videos,
   canDrag,
+  readOnly = false,
 }: {
   stage: Stage;
   pipelineId: string;
   videos: BoardVideo[];
   canDrag: (video: BoardVideo) => boolean;
+  /** Vista general: solo mostrar, sin crear ni mover tarjetas desde aqui. */
+  readOnly?: boolean;
 }) {
   const { can } = useWorkspace();
   const { setNodeRef, isOver } = useDroppable({
@@ -30,6 +33,7 @@ export function BoardColumn({
   });
 
   const [adding, setAdding] = React.useState(false);
+  const canCreate = !readOnly && can("video.create");
 
   return (
     <section
@@ -45,7 +49,7 @@ export function BoardColumn({
         <h3 className="text-ink-900 text-[13px] font-semibold">{stage.name}</h3>
         <span className="text-ink-400 text-[12px]">{videos.length}</span>
         <span className="flex-1" />
-        {can("video.create") ? (
+        {canCreate ? (
           <button
             type="button"
             onClick={() => setAdding(true)}
@@ -73,7 +77,7 @@ export function BoardColumn({
           ))}
         </SortableContext>
 
-        {can("video.create") ? (
+        {canCreate ? (
           <button
             type="button"
             onClick={() => setAdding(true)}
@@ -85,12 +89,14 @@ export function BoardColumn({
         ) : null}
       </div>
 
-      <CreateVideoDialog
-        open={adding}
-        onOpenChange={setAdding}
-        defaultPipelineId={pipelineId}
-        defaultStageId={stage.id}
-      />
+      {readOnly ? null : (
+        <CreateVideoDialog
+          open={adding}
+          onOpenChange={setAdding}
+          defaultPipelineId={pipelineId}
+          defaultStageId={stage.id}
+        />
+      )}
     </section>
   );
 }

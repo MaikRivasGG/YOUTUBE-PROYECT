@@ -111,6 +111,8 @@ export type Role = {
   move_any_stage: boolean;
   manage_checklist: boolean;
   write_comments: boolean;
+  /** Ve el pipeline y las estadisticas de todos los canales, sea o no miembro participante. */
+  view_all_channels: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -155,6 +157,13 @@ export type Channel = {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+};
+
+/** Quien es "miembro participante" de un canal: sin esto no lo ve, salvo view_all_channels. */
+export type ChannelMember = {
+  channel_id: string;
+  user_id: string;
+  created_at: string;
 };
 
 export type Video = {
@@ -351,6 +360,7 @@ export type Database = {
           | "move_any_stage"
           | "manage_checklist"
           | "write_comments"
+          | "view_all_channels"
         >
       >;
       role_stages: TableDef<RoleStage, RoleStage>;
@@ -376,6 +386,7 @@ export type Database = {
           | "created_by"
         >
       >;
+      channel_members: TableDef<ChannelMember, Insert<ChannelMember, "created_at">>;
       videos: TableDef<
         Video,
         Insert<

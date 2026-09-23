@@ -136,6 +136,30 @@ export async function getChannels(
   return data ?? [];
 }
 
+/**
+ * Quien es miembro participante de cada canal, agrupado por canal.
+ *
+ * RLS solo deja ver estas filas a quien tiene 'channel.manage' (o su propia
+ * fila), asi que para el resto del equipo esto llega vacio sin dar error.
+ */
+export async function getChannelMembers(workspaceId: string): Promise<Record<string, string[]>> {
+  const supabase = await supabaseServer();
+  const { data, error } = await supabase
+    .from("channel_members")
+    .select("channel_id, user_id, channels!inner(workspace_id)")
+    .eq("channels.workspace_id", workspaceId);
+
+  if (error) return {};
+
+  const byChannel: Record<string, string[]> = {};
+  for (const row of data ?? []) {
+    const list = byChannel[row.channel_id];
+    if (list) list.push(row.user_id);
+    else byChannel[row.channel_id] = [row.user_id];
+  }
+  return byChannel;
+}
+
 export async function getPendingInvitations(workspaceId: string): Promise<Invitation[]> {
   const supabase = await supabaseServer();
   const { data, error } = await supabase

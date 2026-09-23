@@ -37,9 +37,11 @@ const PALETTE = [
 export function ChannelsPanel({
   channels,
   stats,
+  channelMembers,
 }: {
   channels: Channel[];
   stats: Record<string, ChannelStats>;
+  channelMembers: Record<string, string[]>;
 }) {
   const { can, pipelines } = useWorkspace();
   const [editing, setEditing] = React.useState<Channel | null>(null);
@@ -183,6 +185,7 @@ export function ChannelsPanel({
         open={Boolean(editing)}
         onOpenChange={(open) => (open ? null : setEditing(null))}
         channel={editing}
+        memberIds={editing ? (channelMembers[editing.id] ?? []) : undefined}
       />
     </div>
   );
@@ -192,16 +195,20 @@ function ChannelDialog({
   open,
   onOpenChange,
   channel,
+  memberIds,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   channel?: Channel | null;
+  /** Miembros participantes actuales; undefined en creacion (todos marcados). */
+  memberIds?: string[];
 }) {
-  const { workspaceId, pipelines, defaultPipeline } = useWorkspace();
+  const { workspaceId, pipelines, defaultPipeline, members } = useWorkspace();
   const action = channel ? updateChannelAction : createChannelAction;
   const [state, formAction, pending] = useActionState(action, null);
   const [color, setColor] = React.useState(channel?.color ?? PALETTE[0]);
   const [imageUrl, setImageUrl] = React.useState<string | null>(channel?.image_url ?? null);
+  const currentMemberIds = new Set(memberIds);
 
   React.useEffect(() => {
     if (state?.ok) onOpenChange(false);
@@ -329,6 +336,35 @@ function ChannelDialog({
             ))}
           </div>
         </Field>
+
+        <fieldset>
+          <legend className="text-ink-700 mb-1 text-[13px] font-medium">
+            Miembros con acceso
+          </legend>
+          <p className="text-ink-400 mb-2 text-[11.5px]">
+            Quien no este aqui no vera este canal ni en la pipeline ni en las estadisticas, salvo
+            que su rol tenga el permiso &quot;Ver todos los canales&quot;.
+          </p>
+          <div className="ring-line max-h-40 space-y-0.5 overflow-y-auto rounded-lg p-1.5 ring-1">
+            {members.map((member) => (
+              <label
+                key={member.user_id}
+                className="hover:bg-canvas flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 transition"
+              >
+                <input
+                  type="checkbox"
+                  name="member_ids"
+                  value={member.user_id}
+                  defaultChecked={channel ? currentMemberIds.has(member.user_id) : true}
+                  className="accent-brand-500 size-3.5 rounded"
+                />
+                <span className="text-ink-700 truncate text-[12.5px]">
+                  {member.profile.full_name}
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
 
         <div className="flex justify-end gap-2 pt-1">
           <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>

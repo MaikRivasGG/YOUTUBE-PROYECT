@@ -23,19 +23,39 @@ function readForm(formData: FormData) {
   };
 }
 
+/** Sustituye los miembros participantes de un canal por la lista recibida. */
+async function syncChannelMembers(channelId: string, userIds: string[]) {
+  const supabase = await supabaseServer();
+
+  await supabase.from("channel_members").delete().eq("channel_id", channelId);
+
+  if (userIds.length === 0) return null;
+
+  const { error } = await supabase
+    .from("channel_members")
+    .insert(userIds.map((userId) => ({ channel_id: channelId, user_id: userId })));
+
+  return error;
+}
+
 export async function createChannelAction(_prev: State, formData: FormData): Promise<State> {
   const parsed = channelSchema.safeParse(readForm(formData));
   if (!parsed.success) return fail("Revisa los datos del canal", zodFieldErrors(parsed.error));
 
   const { workspace } = await requireWorkspace();
   const supabase = await supabaseServer();
+  const memberIds = formData.getAll("member_ids").map(String);
 
-  const { error } = await supabase.from("channels").insert({
-    workspace_id: workspace.id,
-    ...parsed.data,
-  });
+  const { data: channel, error } = await supabase
+    .from("channels")
+    .insert({ workspace_id: workspace.id, ...parsed.data })
+    .select("id")
+    .single();
 
   if (error) return fail(errorMessage(error, "No hemos podido crear el canal"));
+
+  const membersError = await syncChannelMembers(channel.id, memberIds);
+  if (membersError) return fail(errorMessage(membersError));
 
   revalidatePath("/canales");
   revalidatePath("/produccion");
@@ -50,9 +70,14 @@ export async function updateChannelAction(_prev: State, formData: FormData): Pro
 
   await requireWorkspace();
   const supabase = await supabaseServer();
-  const { error } = await supabase.from("channels").update(parsed.data).eq("id", id);
+  const memberIds = formData.getAll("member_ids").map(String);
 
+  const { error } = await supabase.from("channels").update(parsed.data).eq("id", id);
   if (error) return fail(errorMessage(error));
+
+  const membersError = await syncChannelMembers(id, memberIds);
+  if (membersError) return fail(errorMessage(membersError));
+
   revalidatePath("/canales");
   revalidatePath("/produccion");
   return ok(undefined);

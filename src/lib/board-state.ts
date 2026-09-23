@@ -36,6 +36,26 @@ export function groupByStage(videos: BoardVideo[]): Map<string, BoardVideo[]> {
   return groups;
 }
 
+/**
+ * Agrupa por StageKind en vez de por etapa: lo que usa la Vista general para
+ * mezclar tarjetas de pipelines distintos en las mismas columnas.
+ */
+export function groupByKind(
+  videos: BoardVideo[],
+  kindOf: (stageId: string) => string | undefined,
+): Map<string, BoardVideo[]> {
+  const groups = new Map<string, BoardVideo[]>();
+  for (const video of videos) {
+    const kind = kindOf(video.stage_id);
+    if (!kind || kind === "archived") continue;
+    const list = groups.get(kind);
+    if (list) list.push(video);
+    else groups.set(kind, [video]);
+  }
+  for (const list of groups.values()) list.sort(byPosition);
+  return groups;
+}
+
 function daysUntil(date: string): number {
   const target = new Date(`${date}T00:00:00`);
   const today = new Date();

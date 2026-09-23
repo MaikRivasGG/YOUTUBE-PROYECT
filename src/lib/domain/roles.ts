@@ -12,6 +12,7 @@ export const PERMISSIONS = [
   "workspace.delete",
   "member.manage",
   "channel.manage",
+  "channel.view_all",
   "pipeline.manage",
   "video.create",
   "video.delete",
@@ -29,6 +30,7 @@ export type PermissionFlag =
   | "manage_workspace"
   | "manage_members"
   | "manage_channels"
+  | "view_all_channels"
   | "manage_pipelines"
   | "create_videos"
   | "delete_videos"
@@ -42,6 +44,7 @@ const FLAG_BY_PERMISSION: Record<Exclude<Permission, "workspace.delete">, Permis
   "workspace.manage": "manage_workspace",
   "member.manage": "manage_members",
   "channel.manage": "manage_channels",
+  "channel.view_all": "view_all_channels",
   "pipeline.manage": "manage_pipelines",
   "video.create": "create_videos",
   "video.delete": "delete_videos",
@@ -132,6 +135,12 @@ export const PERMISSION_FIELDS: {
     flag: "manage_channels",
     label: "Gestionar canales",
     description: "Crear, editar y archivar los canales del equipo.",
+  },
+  {
+    flag: "view_all_channels",
+    label: "Ver todos los canales",
+    description:
+      "Ver el pipeline y las estadisticas de cualquier canal, aunque no sea miembro participante.",
   },
   {
     flag: "manage_pipelines",
