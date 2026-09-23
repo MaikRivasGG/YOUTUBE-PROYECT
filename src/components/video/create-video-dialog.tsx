@@ -7,11 +7,12 @@ import { toast } from "sonner";
 import { useWorkspace } from "@/components/providers/workspace-provider";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
-import { Field, Input, Select, Textarea } from "@/components/ui/field";
+import { Field, Input, Select } from "@/components/ui/field";
 import { createVideo, nextPositionFor } from "@/lib/api/board";
 import { PRIORITIES } from "@/lib/domain/pipeline";
 import { createVideoSchema } from "@/lib/domain/validators";
 import { errorMessage } from "@/lib/utils";
+import { extractYouTubeId, youtubeThumbnailUrl } from "@/lib/youtube";
 
 export function CreateVideoDialog({
   open,
@@ -34,8 +35,10 @@ export function CreateVideoDialog({
   );
   const [pending, setPending] = React.useState(false);
   const [errors, setErrors] = React.useState<Record<string, string>>({});
+  const [referenceUrl, setReferenceUrl] = React.useState("");
 
   const stages = stagesOf(pipelineId);
+  const referenceId = extractYouTubeId(referenceUrl);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -47,7 +50,7 @@ export function CreateVideoDialog({
       pipeline_id: pipelineId,
       stage_id: form.get("stage_id"),
       priority: form.get("priority"),
-      hook: form.get("hook"),
+      reference_url: referenceUrl,
       due_date: form.get("due_date") || null,
     });
 
@@ -71,11 +74,12 @@ export function CreateVideoDialog({
         position,
         channel_id: parsed.data.channel_id ?? null,
         priority: parsed.data.priority,
-        hook: parsed.data.hook ?? null,
+        reference_url: parsed.data.reference_url ?? null,
         due_date: parsed.data.due_date ?? null,
       });
 
       toast.success(`${video.ref} creado`);
+      setReferenceUrl("");
       onOpenChange(false);
       onCreated?.(video.id);
       router.refresh();
@@ -110,14 +114,33 @@ export function CreateVideoDialog({
           />
         </Field>
 
-        <Field label="Hook" htmlFor="hook" hint="La primera frase que retiene al espectador.">
-          <Textarea
-            id="hook"
-            name="hook"
-            rows={2}
-            className="min-h-16"
-            placeholder="El 80% de las baterias mueren por una sola razon"
-          />
+        <Field
+          label="Miniatura de referencia"
+          htmlFor="reference_url"
+          hint="Pega el link de un video de YouTube que sirva de referencia visual."
+          error={errors.reference_url}
+        >
+          <div className="flex gap-3">
+            {referenceId ? (
+              // eslint-disable-next-line @next/next/no-img-element -- miniatura publica de YouTube
+              <img
+                src={youtubeThumbnailUrl(referenceId)}
+                alt=""
+                className="bg-column h-14 w-24 shrink-0 rounded-md object-cover"
+              />
+            ) : (
+              <div className="bg-column text-ink-400 grid h-14 w-24 shrink-0 place-items-center rounded-md text-[10px]">
+                Sin link
+              </div>
+            )}
+            <Input
+              id="reference_url"
+              value={referenceUrl}
+              onChange={(event) => setReferenceUrl(event.target.value)}
+              placeholder="https://youtube.com/watch?v=..."
+              className="flex-1"
+            />
+          </div>
         </Field>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -132,20 +155,6 @@ export function CreateVideoDialog({
               {channels.map((channel) => (
                 <option key={channel.id} value={channel.id}>
                   {channel.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-
-          <Field label="Pipeline" htmlFor="pipeline_id">
-            <Select
-              id="pipeline_id"
-              value={pipelineId}
-              onChange={(event) => setPipelineId(event.target.value)}
-            >
-              {pipelines.map((pipeline) => (
-                <option key={pipeline.id} value={pipeline.id}>
-                  {pipeline.name}
                 </option>
               ))}
             </Select>

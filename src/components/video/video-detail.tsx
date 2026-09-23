@@ -31,11 +31,12 @@ import { toDateInput } from "@/lib/dates";
 import { PRIORITIES, priorityMeta } from "@/lib/domain/pipeline";
 import { canMoveVideo } from "@/lib/domain/roles";
 import { cn, errorMessage, isSafeHttpUrl } from "@/lib/utils";
+import { extractYouTubeId, youtubeThumbnailUrl } from "@/lib/youtube";
 import type { VideoDetail as VideoDetailData } from "@/server/queries";
 import type { Video } from "@/types/database";
 
 /** Campos que se renderizan como enlace o imagen y exigen http(s). */
-const URL_FIELDS = new Set<keyof Video>(["youtube_url", "thumbnail_url"]);
+const URL_FIELDS = new Set<keyof Video>(["youtube_url", "thumbnail_url", "reference_url"]);
 
 export function VideoDetailView({ video: initial }: { video: VideoDetailData }) {
   const workspace = useWorkspace();
@@ -52,6 +53,8 @@ export function VideoDetailView({ video: initial }: { video: VideoDetailData }) 
   const stage = workspace.stageById(video.stage_id);
   const stages = workspace.stagesOf(video.pipeline_id);
   const channel = channels.find((item) => item.id === video.channel_id);
+  const referenceId = video.reference_url ? extractYouTubeId(video.reference_url) : null;
+  const referenceThumbnail = referenceId ? youtubeThumbnailUrl(referenceId) : null;
 
   /** Guarda un campo suelto y revierte si el servidor lo rechaza. */
   const save = React.useCallback(
@@ -371,6 +374,27 @@ export function VideoDetailView({ video: initial }: { video: VideoDetailData }) 
                   placeholder="https://..."
                   onBlur={(event) => save("thumbnail_url", event.target.value.trim() || null)}
                 />
+              </Field>
+
+              <Field label="Miniatura de referencia" hint="Video de YouTube usado como referencia.">
+                <div className="flex gap-3">
+                  {referenceThumbnail ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- miniatura publica de YouTube
+                    <img
+                      src={referenceThumbnail}
+                      alt=""
+                      className="bg-column h-14 w-24 shrink-0 rounded-md object-cover"
+                    />
+                  ) : null}
+                  <Input
+                    type="url"
+                    defaultValue={video.reference_url ?? ""}
+                    disabled={!editable}
+                    placeholder="https://youtube.com/watch?v=..."
+                    className="flex-1"
+                    onBlur={(event) => save("reference_url", event.target.value.trim() || null)}
+                  />
+                </div>
               </Field>
             </Card>
 

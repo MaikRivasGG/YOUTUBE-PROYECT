@@ -33,7 +33,7 @@ export interface CreateVideoPayload {
   position: number;
   channel_id?: string | null;
   priority?: VideoPriority;
-  hook?: string | null;
+  reference_url?: string | null;
   due_date?: string | null;
 }
 

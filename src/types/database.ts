@@ -176,6 +176,8 @@ export type Video = {
   published_at: string | null;
   youtube_url: string | null;
   thumbnail_url: string | null;
+  /** Link de YouTube ajeno usado como referencia visual al crear la tarjeta. */
+  reference_url: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -394,6 +396,7 @@ export type Database = {
           | "published_at"
           | "youtube_url"
           | "thumbnail_url"
+          | "reference_url"
           | "created_by"
         >
       >;

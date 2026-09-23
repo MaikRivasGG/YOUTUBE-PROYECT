@@ -31,6 +31,7 @@ function video(overrides: Partial<BoardVideo> & { id: string }): BoardVideo {
     published_at: null,
     youtube_url: null,
     thumbnail_url: null,
+    reference_url: null,
     created_by: null,
     created_at: "2025-01-01T00:00:00Z",
     updated_at: "2025-01-01T00:00:00Z",

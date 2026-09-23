@@ -121,7 +121,7 @@ export const createVideoSchema = z.object({
   pipeline_id: z.string().uuid("Elige un pipeline"),
   stage_id: z.string().uuid("Elige una etapa"),
   priority: z.enum(priorityValues).default("normal"),
-  hook: optionalText(300),
+  reference_url: optionalUrl,
   due_date: z
     .string()
     .trim()

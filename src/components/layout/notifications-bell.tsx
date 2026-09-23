@@ -25,6 +25,8 @@ export function describeNotification(notification: Notification): string {
       return `Te han asignado "${title}"`;
     case "comment.created":
       return `Nuevo comentario en "${title}": ${String(payload.excerpt ?? "")}`;
+    case "video.due_soon":
+      return `"${title}" vence mañana`;
     default:
       return title;
   }

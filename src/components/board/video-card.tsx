@@ -14,6 +14,7 @@ import { progressOf } from "@/lib/board-state";
 import { dueLabel, isOverdue } from "@/lib/dates";
 import { priorityMeta } from "@/lib/domain/pipeline";
 import { cn, initials } from "@/lib/utils";
+import { extractYouTubeId, youtubeThumbnailUrl } from "@/lib/youtube";
 import type { BoardVideo } from "@/server/queries";
 
 /** Miniatura del canal: su imagen si la tiene, o sus iniciales sobre su color. */
@@ -71,6 +72,10 @@ export function VideoCard({
     .filter((profile): profile is NonNullable<typeof profile> => Boolean(profile));
 
   const ready = stage?.kind === "scheduled" || stage?.kind === "done";
+  // Antes de publicar aun no hay thumbnail_url propio: se usa la miniatura de
+  // referencia como vista previa provisional de la tarjeta.
+  const referenceId = video.reference_url ? extractYouTubeId(video.reference_url) : null;
+  const cardThumbnail = video.thumbnail_url ?? (referenceId ? youtubeThumbnailUrl(referenceId) : null);
 
   return (
     <article
@@ -80,10 +85,10 @@ export function VideoCard({
         dragging ? "rotate-1 opacity-90 shadow-lg" : "hover:ring-ink-400/40",
       )}
     >
-      {video.thumbnail_url ? (
+      {cardThumbnail ? (
         // eslint-disable-next-line @next/next/no-img-element -- miniaturas externas arbitrarias
         <img
-          src={video.thumbnail_url}
+          src={cardThumbnail}
           alt=""
           className="aspect-video w-full rounded-t-xl object-cover"
           loading="lazy"

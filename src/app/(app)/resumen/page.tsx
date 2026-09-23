@@ -3,17 +3,17 @@ import { CalendarClock, CheckCircle2, PlayCircle, TimerReset } from "lucide-reac
 
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
 import { MyWork } from "@/components/dashboard/my-work";
-import { PipelineBreakdown } from "@/components/dashboard/pipeline-breakdown";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { UpcomingCard } from "@/components/dashboard/upcoming";
+import { WorkspacePulse } from "@/components/dashboard/workspace-pulse";
 import { PageHeader } from "@/components/layout/page-header";
 import { requireWorkspace } from "@/lib/session";
 import {
   getActivity,
+  getBoardVideos,
   getMyWork,
   getNotifications,
   getUpcoming,
-  getWorkspaceConfig,
   getWorkspaceStats,
 } from "@/server/queries";
 
@@ -22,13 +22,13 @@ export const metadata: Metadata = { title: "Resumen" };
 export default async function SummaryPage() {
   const { workspace, userId, profile } = await requireWorkspace();
 
-  const [stats, myWork, upcoming, activity, notifications, config] = await Promise.all([
+  const [stats, myWork, boardVideos, upcoming, activity, notifications] = await Promise.all([
     getWorkspaceStats(workspace.id),
     getMyWork(workspace.id, userId),
+    getBoardVideos(workspace.id),
     getUpcoming(workspace.id, 5),
     getActivity(workspace.id, 10),
     getNotifications(workspace.id),
-    getWorkspaceConfig(workspace.id, userId),
   ]);
 
   const firstName = profile.full_name.split(" ")[0];
@@ -78,7 +78,7 @@ export default async function SummaryPage() {
         <div className="mt-4 grid gap-4 xl:grid-cols-[1.6fr_1fr]">
           <div className="flex flex-col gap-4">
             <MyWork videos={myWork} />
-            <PipelineBreakdown stages={config.stages} byStage={stats.by_stage} />
+            <WorkspacePulse videos={boardVideos} />
           </div>
 
           <div className="flex flex-col gap-4">

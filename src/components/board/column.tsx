@@ -2,15 +2,13 @@
 
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { Plus, X } from "lucide-react";
+import { Plus } from "lucide-react";
 import * as React from "react";
-import { toast } from "sonner";
 
 import { SortableVideoCard } from "@/components/board/video-card";
 import { useWorkspace } from "@/components/providers/workspace-provider";
-import { Input } from "@/components/ui/field";
-import { createVideo, nextPositionFor } from "@/lib/api/board";
-import { cn, errorMessage } from "@/lib/utils";
+import { CreateVideoDialog } from "@/components/video/create-video-dialog";
+import { cn } from "@/lib/utils";
 import type { BoardVideo } from "@/server/queries";
 import type { Stage } from "@/types/database";
 
@@ -25,39 +23,13 @@ export function BoardColumn({
   videos: BoardVideo[];
   canDrag: (video: BoardVideo) => boolean;
 }) {
-  const { workspaceId, can } = useWorkspace();
+  const { can } = useWorkspace();
   const { setNodeRef, isOver } = useDroppable({
     id: `column:${stage.id}`,
     data: { type: "column", stageId: stage.id },
   });
 
   const [adding, setAdding] = React.useState(false);
-  const [title, setTitle] = React.useState("");
-  const [saving, setSaving] = React.useState(false);
-
-  async function quickAdd(event: React.FormEvent) {
-    event.preventDefault();
-    const clean = title.trim();
-    if (clean.length < 2) return;
-
-    setSaving(true);
-    try {
-      const position = await nextPositionFor(workspaceId, stage.id);
-      await createVideo({
-        workspace_id: workspaceId,
-        pipeline_id: pipelineId,
-        stage_id: stage.id,
-        title: clean,
-        position,
-      });
-      setTitle("");
-      // Se mantiene abierto para encadenar varias ideas seguidas.
-    } catch (error) {
-      toast.error(errorMessage(error, "No hemos podido crear la tarjeta"));
-    } finally {
-      setSaving(false);
-    }
-  }
 
   return (
     <section
@@ -76,11 +48,11 @@ export function BoardColumn({
         {can("video.create") ? (
           <button
             type="button"
-            onClick={() => setAdding((value) => !value)}
+            onClick={() => setAdding(true)}
             aria-label={`Anadir tarea en ${stage.name}`}
             className="text-ink-400 hover:bg-surface hover:text-ink-900 rounded-md p-1 transition"
           >
-            {adding ? <X className="size-3.5" /> : <Plus className="size-3.5" />}
+            <Plus className="size-3.5" />
           </button>
         ) : null}
       </header>
@@ -101,26 +73,7 @@ export function BoardColumn({
           ))}
         </SortableContext>
 
-        {adding ? (
-          <form onSubmit={quickAdd} className="pt-0.5">
-            <Input
-              autoFocus
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              onBlur={() => {
-                if (!title.trim()) setAdding(false);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") setAdding(false);
-              }}
-              placeholder="Titulo de la tarjeta"
-              disabled={saving}
-              maxLength={160}
-              className="bg-surface text-[13px]"
-            />
-            <p className="text-ink-400 mt-1 px-1 text-[11px]">Enter para crear, Esc para cerrar</p>
-          </form>
-        ) : can("video.create") ? (
+        {can("video.create") ? (
           <button
             type="button"
             onClick={() => setAdding(true)}
@@ -131,6 +84,13 @@ export function BoardColumn({
           </button>
         ) : null}
       </div>
+
+      <CreateVideoDialog
+        open={adding}
+        onOpenChange={setAdding}
+        defaultPipelineId={pipelineId}
+        defaultStageId={stage.id}
+      />
     </section>
   );
 }
