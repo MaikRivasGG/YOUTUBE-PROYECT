@@ -4,7 +4,13 @@ import { Crown, ShieldCheck } from "lucide-react";
 
 import { useWorkspace } from "@/components/providers/workspace-provider";
 
-/** Insignia del rol de quien mira: corona para el propietario, escudo para administradores. */
+/**
+ * Insignia del rol de quien mira: corona para el propietario, escudo para
+ * administradores, y para el resto (Productor, Guionista, o cualquier rol a
+ * medida) una pastilla con el nombre y el color que ya tiene configurado ese
+ * rol en Ajustes -> Roles. Si el miembro lleva varios roles, se muestra el
+ * mas senior (el de menor `position`).
+ */
 export function RoleBadge() {
   const { isOwner, myRoles } = useWorkspace();
 
@@ -32,5 +38,16 @@ export function RoleBadge() {
     );
   }
 
-  return null;
+  const primaryRole = [...myRoles].sort((a, b) => a.position - b.position)[0];
+  if (!primaryRole) return null;
+
+  return (
+    <span
+      title={primaryRole.name}
+      className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold"
+      style={{ backgroundColor: `${primaryRole.color}1a`, color: primaryRole.color }}
+    >
+      {primaryRole.name}
+    </span>
+  );
 }
