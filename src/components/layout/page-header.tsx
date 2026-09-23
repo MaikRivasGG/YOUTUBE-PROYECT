@@ -17,11 +17,14 @@ import type { Notification } from "@/types/database";
  */
 export function PageHeader({
   title,
+  titleBadge,
   subtitle,
   notifications = [],
   children,
 }: {
   title: string;
+  /** Insignia junto al titulo, p.ej. el rol de quien mira (RoleBadge). */
+  titleBadge?: React.ReactNode;
   subtitle?: string;
   notifications?: Notification[];
   children?: React.ReactNode;
@@ -46,7 +49,10 @@ export function PageHeader({
       <header className="bg-surface border-line sticky top-0 z-30 border-b">
         <div className="flex flex-wrap items-center gap-3 px-5 py-3.5 lg:px-7">
           <div className="min-w-0 flex-1">
-            <h1 className="text-ink-900 truncate text-[19px] font-semibold">{title}</h1>
+            <h1 className="text-ink-900 flex items-center gap-2 truncate text-[19px] font-semibold">
+              <span className="truncate">{title}</span>
+              {titleBadge}
+            </h1>
             <p className="text-ink-500 mt-0.5 text-[12.5px]">
               {subtitle ?? `${longDate()} - ${weekNumber()}`}
             </p>

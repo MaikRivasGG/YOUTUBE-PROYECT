@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, LayoutGrid, Zap } from "lucide-react";
 
 import { useWorkspace } from "@/components/providers/workspace-provider";
 import { Badge, Dot } from "@/components/ui/badge";
+import { ToneIcon } from "@/components/dashboard/stat-card";
 import { Card, EmptyState } from "@/components/ui/misc";
 import { dueLabel, isOverdue } from "@/lib/dates";
 import { cn } from "@/lib/utils";
@@ -15,11 +16,19 @@ export function MyWork({ videos }: { videos: BoardVideo[] }) {
 
   return (
     <Card className="p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-ink-900 text-[15px] font-semibold">Mi trabajo</h2>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <span className="flex min-w-0 items-center gap-2.5">
+          <ToneIcon icon={LayoutGrid} tone="violet" />
+          <span className="min-w-0">
+            <h2 className="text-ink-900 text-[15px] font-semibold">Mi trabajo</h2>
+            <p className="text-ink-400 truncate text-[11.5px]">
+              Tu pipeline de producción, todo en un solo lugar.
+            </p>
+          </span>
+        </span>
         <Link
           href="/produccion"
-          className="text-ink-500 hover:text-brand-600 inline-flex items-center gap-1 text-[12px]"
+          className="text-ink-500 hover:text-brand-600 inline-flex shrink-0 items-center gap-1 text-[12px] font-medium"
         >
           Ver pipeline
           <ArrowUpRight className="size-3" aria-hidden />
@@ -28,9 +37,14 @@ export function MyWork({ videos }: { videos: BoardVideo[] }) {
 
       {videos.length === 0 ? (
         <EmptyState
-          title="No tienes tarjetas asignadas"
-          description="Cuando alguien te asigne un guion, una locucion o un montaje aparecera aquí."
-          className="border-0 py-6"
+          icon={
+            <span className="bg-column grid size-12 place-items-center rounded-full">
+              <Zap className="text-ink-400 size-5" aria-hidden />
+            </span>
+          }
+          title="No tienes tareas asignadas"
+          description="Cuando alguien te asigne un guion, una locución o un montaje aparecerá aquí."
+          className="border-0 py-10"
         />
       ) : (
         <ul className="divide-line divide-y">

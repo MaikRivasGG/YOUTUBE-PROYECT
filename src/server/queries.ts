@@ -160,6 +160,23 @@ export async function getChannelMembers(workspaceId: string): Promise<Record<str
   return byChannel;
 }
 
+/** Cuanto de lo que se creo esta semana ya esta hecho: la base del anillo de productividad. */
+export async function getWeeklyProductivity(
+  workspaceId: string,
+): Promise<{ completed: number; total: number }> {
+  const supabase = await supabaseServer();
+  const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
+
+  const { data, error } = await supabase
+    .from("checklist_items")
+    .select("is_done, videos!inner(workspace_id)")
+    .eq("videos.workspace_id", workspaceId)
+    .gte("created_at", since);
+
+  if (error || !data) return { completed: 0, total: 0 };
+  return { completed: data.filter((item) => item.is_done).length, total: data.length };
+}
+
 export async function getPendingInvitations(workspaceId: string): Promise<Invitation[]> {
   const supabase = await supabaseServer();
   const { data, error } = await supabase

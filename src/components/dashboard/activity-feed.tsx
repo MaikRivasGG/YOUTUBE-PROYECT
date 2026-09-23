@@ -2,6 +2,9 @@
 
 import * as React from "react";
 
+import { Users } from "lucide-react";
+
+import { ToneIcon } from "@/components/dashboard/stat-card";
 import { useWorkspace } from "@/components/providers/workspace-provider";
 import { Avatar } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/misc";
@@ -91,9 +94,12 @@ export function ActivityFeed({
 
   return (
     <Card className="p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-ink-900 text-[14px] font-semibold">{title}</h2>
-        <span className="flex items-center gap-1.5 text-[10px] font-bold tracking-wide text-emerald-600 uppercase">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <span className="flex items-center gap-2.5">
+          <ToneIcon icon={Users} tone="brand" size="sm" />
+          <h2 className="text-ink-900 text-[14px] font-semibold">{title}</h2>
+        </span>
+        <span className="flex shrink-0 items-center gap-1.5 text-[10px] font-bold tracking-wide text-emerald-600 uppercase dark:text-emerald-400">
           <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
           En vivo
         </span>

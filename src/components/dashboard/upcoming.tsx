@@ -1,6 +1,7 @@
 import { CalendarDays } from "lucide-react";
 import Link from "next/link";
 
+import { ToneIcon } from "@/components/dashboard/stat-card";
 import { Card } from "@/components/ui/misc";
 import { dueLabel, isOverdue, time } from "@/lib/dates";
 import { cn } from "@/lib/utils";
@@ -18,9 +19,9 @@ export interface UpcomingItem {
 export function UpcomingCard({ items }: { items: UpcomingItem[] }) {
   return (
     <Card className="p-4">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex items-center gap-2.5">
+        <ToneIcon icon={CalendarDays} tone="amber" size="sm" />
         <h2 className="text-ink-900 text-[14px] font-semibold">Próximos vencimientos</h2>
-        <CalendarDays className="text-ink-400 size-4" aria-hidden />
       </div>
 
       {items.length === 0 ? (

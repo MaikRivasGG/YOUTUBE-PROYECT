@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BarChart3,
   CalendarClock,
   CheckCircle2,
   ChevronLeft,
@@ -22,10 +23,10 @@ import type { BoardVideo } from "@/server/queries";
 import type { Stage, StageKind } from "@/types/database";
 
 const TABS = [
-  { key: "carga", label: "Carga por etapa" },
-  { key: "publicar", label: "Videos listos para publicar" },
-  { key: "ideas", label: "Ideas sin finalizar" },
-  { key: "revision", label: "Videos listos para revisión" },
+  { key: "carga", label: "Carga por etapa", icon: BarChart3 },
+  { key: "publicar", label: "Videos listos para publicar", icon: null },
+  { key: "ideas", label: "Ideas sin finalizar", icon: null },
+  { key: "revision", label: "Videos listos para revisión", icon: null },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -91,12 +92,13 @@ export function WorkspacePulse({ videos }: { videos: BoardVideo[] }) {
             type="button"
             onClick={() => setTab(item.key)}
             className={cn(
-              "shrink-0 rounded-md px-2.5 py-1.5 font-medium whitespace-nowrap transition",
+              "flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium whitespace-nowrap transition",
               tab === item.key
                 ? "bg-brand-50 text-brand-700 dark:text-brand-500"
                 : "text-ink-500 hover:bg-canvas",
             )}
           >
+            {item.icon ? <item.icon className="size-3.5" aria-hidden /> : null}
             {item.label}
           </button>
         ))}
@@ -112,47 +114,22 @@ export function WorkspacePulse({ videos }: { videos: BoardVideo[] }) {
             onFocus={() => setPaused(true)}
             onBlur={() => setPaused(false)}
           >
-            <div className="mb-3.5 flex items-center justify-between">
-              <span className="flex min-w-0 items-center gap-2.5">
-                <ChannelMark
-                  name={channel.name}
-                  color={channel.color}
-                  imageUrl={channel.image_url}
-                  size="sm"
-                />
-                <span className="min-w-0">
-                  <span className="text-ink-900 block truncate text-[13.5px] font-semibold">
-                    {channel.name}
-                  </span>
-                  <span className="text-ink-400 block text-[11px]">
-                    {channel.handle ?? channel.niche ?? "Canal"}
-                  </span>
+            <div className="mb-3.5 flex items-center gap-2.5">
+              <ChannelMark
+                name={channel.name}
+                color={channel.color}
+                imageUrl={channel.image_url}
+                size="md"
+                shape="circle"
+              />
+              <span className="min-w-0">
+                <span className="text-ink-900 block truncate text-[14px] font-semibold">
+                  {channel.name}
+                </span>
+                <span className="text-ink-400 block truncate text-[11px]">
+                  YouTube{channel.handle ? ` · ${channel.handle}` : ""}
                 </span>
               </span>
-
-              {activeChannels.length > 1 ? (
-                <div className="flex shrink-0 items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setChannelIndex((value) => value - 1)}
-                    aria-label="Canal anterior"
-                    className="text-ink-400 hover:bg-canvas hover:text-ink-900 rounded-md p-1 transition"
-                  >
-                    <ChevronLeft className="size-4" />
-                  </button>
-                  <span className="text-ink-400 text-[11px] tabular-nums">
-                    {index + 1}/{activeChannels.length}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setChannelIndex((value) => value + 1)}
-                    aria-label="Canal siguiente"
-                    className="text-ink-400 hover:bg-canvas hover:text-ink-900 rounded-md p-1 transition"
-                  >
-                    <ChevronRight className="size-4" />
-                  </button>
-                </div>
-              ) : null}
             </div>
 
             <ChannelStageFunnel
@@ -163,19 +140,39 @@ export function WorkspacePulse({ videos }: { videos: BoardVideo[] }) {
             />
 
             {activeChannels.length > 1 ? (
-              <div className="mt-3.5 flex justify-center gap-1.5">
-                {activeChannels.map((item, dotIndex) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setChannelIndex(dotIndex)}
-                    aria-label={`Ver ${item.name}`}
-                    className={cn(
-                      "h-1.5 rounded-full transition-all",
-                      dotIndex === index ? "bg-brand-500 w-4" : "bg-line w-1.5",
-                    )}
-                  />
-                ))}
+              <div className="mt-4 flex items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setChannelIndex((value) => value - 1)}
+                  aria-label="Canal anterior"
+                  className="text-ink-400 hover:bg-canvas hover:text-ink-900 rounded-md p-1 transition"
+                >
+                  <ChevronLeft className="size-4" />
+                </button>
+
+                <div className="flex items-center gap-1.5">
+                  {activeChannels.map((item, dotIndex) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setChannelIndex(dotIndex)}
+                      aria-label={`Ver ${item.name}`}
+                      className={cn(
+                        "h-1.5 rounded-full transition-all",
+                        dotIndex === index ? "bg-brand-500 w-4" : "bg-line w-1.5",
+                      )}
+                    />
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setChannelIndex((value) => value + 1)}
+                  aria-label="Canal siguiente"
+                  className="text-ink-400 hover:bg-canvas hover:text-ink-900 rounded-md p-1 transition"
+                >
+                  <ChevronRight className="size-4" />
+                </button>
               </div>
             ) : null}
           </div>

@@ -54,6 +54,58 @@ export function Progress({
   );
 }
 
+/** Anillo de progreso (donut), para metricas de "cuanto se ha completado". */
+export function RadialProgress({
+  value,
+  size = 72,
+  stroke = 7,
+  color = "var(--color-brand-500)",
+  className,
+}: {
+  value: number;
+  size?: number;
+  stroke?: number;
+  color?: string;
+  className?: string;
+}) {
+  const safe = Math.max(0, Math.min(100, value));
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference * (1 - safe / 100);
+
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
+      className={cn("shrink-0 -rotate-90", className)}
+      role="img"
+      aria-label={`${Math.round(safe)}%`}
+    >
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="none"
+        stroke="var(--color-column)"
+        strokeWidth={stroke}
+      />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="none"
+        stroke={color}
+        strokeWidth={stroke}
+        strokeLinecap="round"
+        strokeDasharray={circumference}
+        strokeDashoffset={offset}
+        className="transition-[stroke-dashoffset] duration-500"
+      />
+    </svg>
+  );
+}
+
 export function EmptyState({
   icon,
   title,
