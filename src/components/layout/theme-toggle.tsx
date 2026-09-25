@@ -18,18 +18,27 @@ function applyTheme(dark: boolean) {
 /**
  * Modo nocturno/diurno. El estado real vive en la clase `dark` del <html>,
  * puesta antes del primer pintado por el script anti-parpadeo de layout.tsx.
- * El estado inicial se lee de ahi (por eso el hydration warning se ignora
- * aqui a proposito: el servidor no puede saber que eligio el navegador).
+ *
+ * El servidor no sabe que tema eligio el navegador, asi que el primer render
+ * en el cliente tiene que ser IGUAL al del servidor (icono vacio) para no
+ * disparar un aviso de hidratacion; el icono real aparece justo despues,
+ * al montar, leyendo la clase que ya puso el script.
  */
 export function ThemeToggle() {
-  const [dark, setDark] = React.useState(
-    () => typeof document !== "undefined" && document.documentElement.classList.contains("dark"),
-  );
+  const [mounted, setMounted] = React.useState(false);
+  const [dark, setDark] = React.useState(false);
+
+  React.useEffect(() => {
+    // Señal de "ya estamos en el navegador": no hay forma de suscribirse a
+    // esto, es un unico salto de servidor a cliente a proposito.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+    setDark(document.documentElement.classList.contains("dark"));
+  }, []);
 
   return (
     <button
       type="button"
-      suppressHydrationWarning
       onClick={() => {
         const next = !dark;
         setDark(next);
@@ -39,7 +48,15 @@ export function ThemeToggle() {
       title={dark ? "Modo diurno" : "Modo nocturno"}
       className="bg-canvas text-ink-500 ring-line hover:text-ink-900 grid size-9 shrink-0 place-items-center rounded-full ring-1 transition"
     >
-      {dark ? <Sun className="size-4" aria-hidden /> : <Moon className="size-4" aria-hidden />}
+      {mounted ? (
+        dark ? (
+          <Sun className="size-4" aria-hidden />
+        ) : (
+          <Moon className="size-4" aria-hidden />
+        )
+      ) : (
+        <span className="size-4" aria-hidden />
+      )}
     </button>
   );
 }

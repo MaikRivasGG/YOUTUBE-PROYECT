@@ -37,11 +37,14 @@ try {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={inter.variable} suppressHydrationWarning>
+    // Sin className aqui: si React tuviera algo que reconciliar en <html>,
+    // pisa la clase "dark" que pone el script de abajo justo antes de
+    // hidratar y el tema se resetea en cada recarga.
+    <html lang="es" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
-      <body className="min-h-dvh antialiased">
+      <body className={`${inter.variable} min-h-dvh antialiased`}>
         {children}
         <Toaster
           position="bottom-right"
