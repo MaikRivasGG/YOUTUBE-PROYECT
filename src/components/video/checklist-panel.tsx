@@ -40,7 +40,7 @@ export function ChecklistPanel({
   videoId: string;
   initial: ChecklistRow[];
 }) {
-  const { can, roles, members, memberById, roleById, myRoles } = useWorkspace();
+  const { can, roles, members, memberById, roleById, myRoles, workspaceId } = useWorkspace();
   const [items, setItems] = React.useState<ChecklistRow[]>(
     [...initial].sort((a, b) => a.position - b.position),
   );
@@ -79,9 +79,25 @@ export function ChecklistPanel({
   async function applyTemplate() {
     setApplyingTemplate(true);
     try {
+      const supabase = supabaseBrowser();
+
+      // Sin esto, un equipo que aun no guardo ninguna plantilla veria
+      // "ya tenia todos los pasos" cuando en realidad no hay plantilla
+      // que aplicar: mensajes muy distintos para el mismo boton en cero.
+      const { count: templateSize } = await supabase
+        .from("checklist_templates")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", workspaceId);
+
+      if (!templateSize) {
+        toast.error(
+          "Tu equipo aun no tiene una plantilla guardada. Guardala primero desde un video con el checklist completo.",
+        );
+        return;
+      }
+
       const count = await applyChecklistTemplate(videoId);
       if (count > 0) {
-        const supabase = supabaseBrowser();
         const { data, error } = await supabase
           .from("checklist_items")
           .select("*, checklist_assignees(user_id)")
