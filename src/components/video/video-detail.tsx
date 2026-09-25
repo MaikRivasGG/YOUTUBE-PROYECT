@@ -284,11 +284,7 @@ export function VideoDetailView({ video: initial }: { video: VideoDetailData }) 
             </Card>
 
             <Card className="p-4">
-              <ChecklistPanel
-                videoId={video.id}
-                channelId={video.channel_id}
-                initial={video.checklist_items as ChecklistRow[]}
-              />
+              <ChecklistPanel videoId={video.id} initial={video.checklist_items as ChecklistRow[]} />
             </Card>
 
             <Card className="p-5">

@@ -1,6 +1,6 @@
 "use client";
 
-import { BookmarkPlus, Check, ChevronDown, Plus, Trash2, UserPlus } from "lucide-react";
+import { BookmarkPlus, Check, ChevronDown, ClipboardCheck, Plus, Trash2, UserPlus } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
 
@@ -11,6 +11,7 @@ import { Menu, MenuItem, MenuLabel } from "@/components/ui/menu";
 import { Progress } from "@/components/ui/misc";
 import {
   addChecklistItem,
+  applyChecklistTemplate,
   deleteChecklistItem,
   saveChecklistAsTemplate,
   setChecklistDone,
@@ -18,6 +19,7 @@ import {
   updateChecklistItem,
 } from "@/lib/api/board";
 import { relative } from "@/lib/dates";
+import { supabaseBrowser } from "@/lib/supabase/client";
 import { cn, errorMessage } from "@/lib/utils";
 
 export interface ChecklistRow {
@@ -33,11 +35,9 @@ export interface ChecklistRow {
 
 export function ChecklistPanel({
   videoId,
-  channelId,
   initial,
 }: {
   videoId: string;
-  channelId: string | null;
   initial: ChecklistRow[];
 }) {
   const { can, roles, members, memberById, roleById, myRoles } = useWorkspace();
@@ -48,15 +48,16 @@ export function ChecklistPanel({
   const [roleId, setRoleId] = React.useState("");
   const [adding, setAdding] = React.useState(false);
   const [savingTemplate, setSavingTemplate] = React.useState(false);
+  const [applyingTemplate, setApplyingTemplate] = React.useState(false);
 
   const done = items.filter((item) => item.is_done).length;
   const progress = items.length ? Math.round((done / items.length) * 100) : 0;
   const editable = can("video.edit");
   // Marcar un paso y asignar gente es trabajar; anadir, cambiar de rol o
-  // borrar pasos es tocar el proceso, y eso pide su propio permiso.
+  // borrar pasos es tocar el proceso, y eso pide su propio permiso. La
+  // plantilla es una sola para todo el equipo (vale para cualquier canal),
+  // asi que guardarla o aplicarla pide el mismo permiso.
   const manageStructure = can("checklist.manage");
-  // Guardar como plantilla del canal es administrar el canal, no el video.
-  const canSaveTemplate = channelId !== null && can("channel.manage");
   const myRoleIds = new Set(myRoles.map((role) => role.id));
 
   async function saveAsTemplate() {
@@ -65,13 +66,40 @@ export function ChecklistPanel({
       const count = await saveChecklistAsTemplate(videoId);
       toast.success(
         count > 0
-          ? `Plantilla del canal actualizada con ${count} paso${count === 1 ? "" : "s"}`
-          : "Plantilla del canal guardada vacia",
+          ? `Plantilla del equipo actualizada con ${count} paso${count === 1 ? "" : "s"}`
+          : "Plantilla del equipo guardada vacia",
       );
     } catch (error) {
       toast.error(errorMessage(error, "No hemos podido guardar la plantilla"));
     } finally {
       setSavingTemplate(false);
+    }
+  }
+
+  async function applyTemplate() {
+    setApplyingTemplate(true);
+    try {
+      const count = await applyChecklistTemplate(videoId);
+      if (count > 0) {
+        const supabase = supabaseBrowser();
+        const { data, error } = await supabase
+          .from("checklist_items")
+          .select("*, checklist_assignees(user_id)")
+          .eq("video_id", videoId)
+          .order("position");
+        if (!error && data) {
+          setItems(data as unknown as ChecklistRow[]);
+        }
+      }
+      toast.success(
+        count > 0
+          ? `Anadidos ${count} paso${count === 1 ? "" : "s"} de la plantilla`
+          : "Este checklist ya tenia todos los pasos de la plantilla",
+      );
+    } catch (error) {
+      toast.error(errorMessage(error, "No hemos podido aplicar la plantilla"));
+    } finally {
+      setApplyingTemplate(false);
     }
   }
 
@@ -190,20 +218,32 @@ export function ChecklistPanel({
 
   return (
     <section>
-      <div className="mb-2 flex items-center justify-between gap-2">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-ink-900 text-[14px] font-semibold">Notas y subtareas</h2>
         <div className="flex items-center gap-2">
-          {canSaveTemplate ? (
-            <button
-              type="button"
-              onClick={saveAsTemplate}
-              disabled={savingTemplate}
-              title="Guardar esta lista como plantilla del canal: los videos nuevos naceran con ella puesta"
-              className="text-ink-500 hover:text-brand-600 inline-flex items-center gap-1 text-[11px] font-medium transition disabled:opacity-50"
-            >
-              <BookmarkPlus className="size-3.5" aria-hidden />
-              {savingTemplate ? "Guardando..." : "Guardar como plantilla"}
-            </button>
+          {manageStructure ? (
+            <>
+              <button
+                type="button"
+                onClick={applyTemplate}
+                disabled={applyingTemplate}
+                title="Anadir a este video los pasos de la plantilla del equipo que aun no tenga"
+                className="text-ink-500 hover:text-brand-600 inline-flex items-center gap-1 text-[11px] font-medium transition disabled:opacity-50"
+              >
+                <ClipboardCheck className="size-3.5" aria-hidden />
+                {applyingTemplate ? "Aplicando..." : "Aplicar plantilla"}
+              </button>
+              <button
+                type="button"
+                onClick={saveAsTemplate}
+                disabled={savingTemplate}
+                title="Guardar esta lista como plantilla del equipo (vale para cualquier canal): los videos nuevos naceran con ella puesta"
+                className="text-ink-500 hover:text-brand-600 inline-flex items-center gap-1 text-[11px] font-medium transition disabled:opacity-50"
+              >
+                <BookmarkPlus className="size-3.5" aria-hidden />
+                {savingTemplate ? "Guardando..." : "Guardar como plantilla"}
+              </button>
+            </>
           ) : null}
           <span className="text-ink-400 text-[12px]">
             {done}/{items.length}

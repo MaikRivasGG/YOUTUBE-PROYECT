@@ -605,12 +605,13 @@ values ((select id from public.channels where name = 'Pulso Tech'),
         '33333333-3333-3333-3333-333333333333');
 
 -- ---------------------------------------------------------------------------
--- Plantilla de checklist por canal: describirlo una vez, no reescribirlo en
--- cada tarjeta nueva.
+-- Plantilla de checklist del equipo: describirlo una vez, no reescribirlo en
+-- cada tarjeta nueva. Es una sola plantilla para todos los canales, no una
+-- por canal.
 -- ---------------------------------------------------------------------------
 
 \echo ''
-\echo '## 63 · Guardar el checklist de un video como plantilla del canal'
+\echo '## 63 · Guardar el checklist de un video como plantilla del equipo'
 reset role;
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 set role authenticated;
@@ -628,9 +629,7 @@ select public.save_checklist_as_template(
 ) as pasos_guardados;
 
 \echo ''
-\echo '## 64 · Sin channel.manage no se puede guardar como plantilla -> debe fallar'
--- Un video de un canal que Carla si puede ver (Mente Curiosa, no le retiraron
--- el acceso), para probar el rechazo por permiso y no por visibilidad.
+\echo '## 64 · Sin checklist.manage no se puede guardar como plantilla -> debe fallar'
 reset role;
 set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
 set role authenticated;
@@ -639,43 +638,56 @@ select public.save_checklist_as_template(
 );
 
 \echo ''
-\echo '## 65 · Un video nuevo del canal nace con el checklist de la plantilla'
+\echo '## 65 · Un video nuevo nace con el checklist de la plantilla, tenga canal o no'
 reset role;
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 set role authenticated;
-insert into public.videos (workspace_id, channel_id, pipeline_id, stage_id, ref, title, created_by)
+insert into public.videos (workspace_id, pipeline_id, stage_id, ref, title, created_by)
 select
-  c.workspace_id, c.id, c.pipeline_id,
-  (select s.id from public.stages s where s.pipeline_id = c.pipeline_id and s.slug = 'idea'),
+  workspace_id, pipeline_id,
+  (select s.id from public.stages s where s.pipeline_id = v.pipeline_id and s.slug = 'idea'),
   'TPL-002', 'Video con plantilla aplicada', '11111111-1111-1111-1111-111111111111'
-from public.channels c
-where c.id = (select id from public.channels order by created_at limit 1);
+from (select workspace_id, pipeline_id from public.videos where title = 'Video con plantilla') v;
 select title, role_id is not null as tiene_rol from public.checklist_items
 where video_id = (select id from public.videos where title = 'Video con plantilla aplicada')
 order by position;
 
 \echo ''
-\echo '## 66 · La plantilla no se puede tocar sin channel.manage -> debe fallar'
-reset role;
-set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
-set role authenticated;
-insert into public.channel_checklist_templates (channel_id, title)
-values ((select id from public.channels order by created_at limit 1), 'Paso colado');
-
-\echo ''
-\echo '## 67 · Sin ser miembro del canal (ni channel.manage) no se ve su plantilla'
+\echo '## 66 · Cualquier miembro del equipo ve la plantilla, aunque no pueda editarla'
 reset role;
 set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
 set role authenticated;
-select count(*) as plantilla_pulso_tech_para_carla
-from public.channel_checklist_templates
-where channel_id = (select id from public.channels order by created_at limit 1);
+select count(*) as pasos_de_plantilla_para_carla from public.checklist_templates;
 
 \echo ''
-\echo '## 68 · Quien administra el canal siempre ve su plantilla'
+\echo '## 67 · Pero sin checklist.manage no puede tocarla -> debe fallar'
+reset role;
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+set role authenticated;
+insert into public.checklist_templates (workspace_id, title)
+values ((select id from public.workspaces limit 1), 'Paso colado');
+
+\echo ''
+\echo '## 68 · Aplicar la plantilla a mano a un video antiguo anade solo lo que falta'
+-- Video del seed original, de antes de que existiera cualquier plantilla:
+-- ya tiene "Guion aprobado" (con otro contexto) y le falta "Miniatura lista".
 reset role;
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 set role authenticated;
-select count(*) as plantilla_pulso_tech_para_ana
-from public.channel_checklist_templates
-where channel_id = (select id from public.channels order by created_at limit 1);
+select title from public.checklist_items
+where video_id = (select id from public.videos where title = 'El cafe perfecto en casa')
+order by position;
+select public.apply_checklist_template(
+  (select id from public.videos where title = 'El cafe perfecto en casa')
+) as pasos_anadidos_primera_vez;
+select title from public.checklist_items
+where video_id = (select id from public.videos where title = 'El cafe perfecto en casa')
+order by position;
+
+\echo ''
+\echo '## 69 · Aplicarla otra vez no duplica lo que ya estaba puesto'
+select public.apply_checklist_template(
+  (select id from public.videos where title = 'El cafe perfecto en casa')
+) as pasos_anadidos_segunda_vez;
+select count(*) as total_pasos from public.checklist_items
+where video_id = (select id from public.videos where title = 'El cafe perfecto en casa');
