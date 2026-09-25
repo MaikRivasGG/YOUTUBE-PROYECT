@@ -274,6 +274,22 @@ export function VideoDetailView({ video: initial }: { video: VideoDetailData }) 
               </div>
             </Card>
 
+            <Card className="p-4">
+              <StageDeliverablesPanel
+                videoId={video.id}
+                pipelineId={video.pipeline_id}
+                currentStageId={video.stage_id}
+                initial={video.video_stage_links as StageLinkRow[]}
+              />
+            </Card>
+
+            <Card className="p-4">
+              <ChecklistPanel
+                videoId={video.id}
+                initial={video.checklist_items as ChecklistRow[]}
+              />
+            </Card>
+
             <Card className="p-5">
               <CommentsPanel videoId={video.id} initial={video.comments as CommentRow[]} />
             </Card>
@@ -372,15 +388,6 @@ export function VideoDetailView({ video: initial }: { video: VideoDetailData }) 
             </Card>
 
             <Card className="p-4">
-              <StageDeliverablesPanel
-                videoId={video.id}
-                pipelineId={video.pipeline_id}
-                currentStageId={video.stage_id}
-                initial={video.video_stage_links as StageLinkRow[]}
-              />
-            </Card>
-
-            <Card className="p-4">
               <h2 className="text-ink-900 mb-2.5 text-[14px] font-semibold">Equipo asignado</h2>
               <ul className="space-y-1">
                 {members.map((member) => {
@@ -422,13 +429,6 @@ export function VideoDetailView({ video: initial }: { video: VideoDetailData }) 
                   );
                 })}
               </ul>
-            </Card>
-
-            <Card className="p-4">
-              <ChecklistPanel
-                videoId={video.id}
-                initial={video.checklist_items as ChecklistRow[]}
-              />
             </Card>
 
             <Card className="p-4">
