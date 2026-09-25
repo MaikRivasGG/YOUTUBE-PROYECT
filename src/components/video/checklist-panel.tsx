@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, Plus, Trash2, UserPlus } from "lucide-react";
+import { BookmarkPlus, Check, ChevronDown, Plus, Trash2, UserPlus } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
 
@@ -12,6 +12,7 @@ import { Progress } from "@/components/ui/misc";
 import {
   addChecklistItem,
   deleteChecklistItem,
+  saveChecklistAsTemplate,
   setChecklistDone,
   toggleChecklistAssignee,
   updateChecklistItem,
@@ -30,7 +31,15 @@ export interface ChecklistRow {
   checklist_assignees: { user_id: string }[];
 }
 
-export function ChecklistPanel({ videoId, initial }: { videoId: string; initial: ChecklistRow[] }) {
+export function ChecklistPanel({
+  videoId,
+  channelId,
+  initial,
+}: {
+  videoId: string;
+  channelId: string | null;
+  initial: ChecklistRow[];
+}) {
   const { can, roles, members, memberById, roleById, myRoles } = useWorkspace();
   const [items, setItems] = React.useState<ChecklistRow[]>(
     [...initial].sort((a, b) => a.position - b.position),
@@ -38,6 +47,7 @@ export function ChecklistPanel({ videoId, initial }: { videoId: string; initial:
   const [title, setTitle] = React.useState("");
   const [roleId, setRoleId] = React.useState("");
   const [adding, setAdding] = React.useState(false);
+  const [savingTemplate, setSavingTemplate] = React.useState(false);
 
   const done = items.filter((item) => item.is_done).length;
   const progress = items.length ? Math.round((done / items.length) * 100) : 0;
@@ -45,7 +55,25 @@ export function ChecklistPanel({ videoId, initial }: { videoId: string; initial:
   // Marcar un paso y asignar gente es trabajar; anadir, cambiar de rol o
   // borrar pasos es tocar el proceso, y eso pide su propio permiso.
   const manageStructure = can("checklist.manage");
+  // Guardar como plantilla del canal es administrar el canal, no el video.
+  const canSaveTemplate = channelId !== null && can("channel.manage");
   const myRoleIds = new Set(myRoles.map((role) => role.id));
+
+  async function saveAsTemplate() {
+    setSavingTemplate(true);
+    try {
+      const count = await saveChecklistAsTemplate(videoId);
+      toast.success(
+        count > 0
+          ? `Plantilla del canal actualizada con ${count} paso${count === 1 ? "" : "s"}`
+          : "Plantilla del canal guardada vacia",
+      );
+    } catch (error) {
+      toast.error(errorMessage(error, "No hemos podido guardar la plantilla"));
+    } finally {
+      setSavingTemplate(false);
+    }
+  }
 
   /** Un paso sin rol lo marca cualquiera; con rol, solo quien lo lleva. */
   function canComplete(item: ChecklistRow): boolean {
@@ -162,11 +190,25 @@ export function ChecklistPanel({ videoId, initial }: { videoId: string; initial:
 
   return (
     <section>
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-2 flex items-center justify-between gap-2">
         <h2 className="text-ink-900 text-[14px] font-semibold">Notas y subtareas</h2>
-        <span className="text-ink-400 text-[12px]">
-          {done}/{items.length}
-        </span>
+        <div className="flex items-center gap-2">
+          {canSaveTemplate ? (
+            <button
+              type="button"
+              onClick={saveAsTemplate}
+              disabled={savingTemplate}
+              title="Guardar esta lista como plantilla del canal: los videos nuevos naceran con ella puesta"
+              className="text-ink-500 hover:text-brand-600 inline-flex items-center gap-1 text-[11px] font-medium transition disabled:opacity-50"
+            >
+              <BookmarkPlus className="size-3.5" aria-hidden />
+              {savingTemplate ? "Guardando..." : "Guardar como plantilla"}
+            </button>
+          ) : null}
+          <span className="text-ink-400 text-[12px]">
+            {done}/{items.length}
+          </span>
+        </div>
       </div>
 
       <Progress value={progress} className="mb-3" />

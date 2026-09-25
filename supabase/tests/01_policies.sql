@@ -603,3 +603,79 @@ set role authenticated;
 insert into public.channel_members (channel_id, user_id)
 values ((select id from public.channels where name = 'Pulso Tech'),
         '33333333-3333-3333-3333-333333333333');
+
+-- ---------------------------------------------------------------------------
+-- Plantilla de checklist por canal: describirlo una vez, no reescribirlo en
+-- cada tarjeta nueva.
+-- ---------------------------------------------------------------------------
+
+\echo ''
+\echo '## 63 · Guardar el checklist de un video como plantilla del canal'
+reset role;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+set role authenticated;
+insert into public.checklist_items (video_id, title, role_id, position, created_by)
+select
+  (select id from public.videos where title = 'Video con plantilla'),
+  d.title, r.id, d.position, '11111111-1111-1111-1111-111111111111'
+from (values
+  ('Guion aprobado',  'Guionista', 1000),
+  ('Miniatura lista', null,        2000)
+) as d(title, role_name, position)
+left join public.roles r on r.name = d.role_name;
+select public.save_checklist_as_template(
+  (select id from public.videos where title = 'Video con plantilla')
+) as pasos_guardados;
+
+\echo ''
+\echo '## 64 · Sin channel.manage no se puede guardar como plantilla -> debe fallar'
+-- Un video de un canal que Carla si puede ver (Mente Curiosa, no le retiraron
+-- el acceso), para probar el rechazo por permiso y no por visibilidad.
+reset role;
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+set role authenticated;
+select public.save_checklist_as_template(
+  (select id from public.videos where title = 'La paradoja del tiempo')
+);
+
+\echo ''
+\echo '## 65 · Un video nuevo del canal nace con el checklist de la plantilla'
+reset role;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+set role authenticated;
+insert into public.videos (workspace_id, channel_id, pipeline_id, stage_id, ref, title, created_by)
+select
+  c.workspace_id, c.id, c.pipeline_id,
+  (select s.id from public.stages s where s.pipeline_id = c.pipeline_id and s.slug = 'idea'),
+  'TPL-002', 'Video con plantilla aplicada', '11111111-1111-1111-1111-111111111111'
+from public.channels c
+where c.id = (select id from public.channels order by created_at limit 1);
+select title, role_id is not null as tiene_rol from public.checklist_items
+where video_id = (select id from public.videos where title = 'Video con plantilla aplicada')
+order by position;
+
+\echo ''
+\echo '## 66 · La plantilla no se puede tocar sin channel.manage -> debe fallar'
+reset role;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+set role authenticated;
+insert into public.channel_checklist_templates (channel_id, title)
+values ((select id from public.channels order by created_at limit 1), 'Paso colado');
+
+\echo ''
+\echo '## 67 · Sin ser miembro del canal (ni channel.manage) no se ve su plantilla'
+reset role;
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+set role authenticated;
+select count(*) as plantilla_pulso_tech_para_carla
+from public.channel_checklist_templates
+where channel_id = (select id from public.channels order by created_at limit 1);
+
+\echo ''
+\echo '## 68 · Quien administra el canal siempre ve su plantilla'
+reset role;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+set role authenticated;
+select count(*) as plantilla_pulso_tech_para_ana
+from public.channel_checklist_templates
+where channel_id = (select id from public.channels order by created_at limit 1);

@@ -159,6 +159,19 @@ export async function deleteChecklistItem(id: string) {
   if (error) throw error;
 }
 
+/**
+ * Reemplaza la plantilla de checklist del canal del video por su checklist
+ * actual. Los videos nuevos de ese canal nacen con estos pasos ya puestos.
+ */
+export async function saveChecklistAsTemplate(videoId: string): Promise<number> {
+  const supabase = supabaseBrowser();
+  const { data, error } = await supabase.rpc("save_checklist_as_template", {
+    p_video: videoId,
+  });
+  if (error) throw error;
+  return data as number;
+}
+
 export async function toggleChecklistAssignee(itemId: string, userId: string, assigned: boolean) {
   const supabase = supabaseBrowser();
   if (assigned) {

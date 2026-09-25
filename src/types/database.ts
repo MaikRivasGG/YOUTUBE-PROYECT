@@ -468,6 +468,7 @@ export type Database = {
         Args: { p_workspace: string; p_days?: number };
         Returns: { stage_id: string; avg_hours: number; samples: number }[];
       };
+      save_checklist_as_template: { Args: { p_video: string }; Returns: number };
     };
     Enums: {
       stage_kind: StageKind;
