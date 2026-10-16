@@ -10,6 +10,7 @@ const PUBLIC_PATHS = [
   "/nueva-password",
   "/invitacion",
   "/auth",
+  "/api/keepalive",
 ];
 
 function isPublic(pathname: string): boolean {
